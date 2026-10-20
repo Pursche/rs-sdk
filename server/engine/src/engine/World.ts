@@ -1,3 +1,4 @@
+import { activeWorldSettings } from '#/util/WorldSettings.js';
 import { tickExchange } from '#/engine/market/GrandExchange.js';
 import { playerSaveStore } from '#/engine/market/MarketStore.js';
 // stdlib
@@ -123,7 +124,7 @@ class World {
     private static readonly PLAYERS: number = 2047;
     private static readonly NPCS: number = Environment.runtime.maxNpcs;
 
-    private static readonly TICKRATE: number = Environment.NODE_TICKRATE;
+    private static readonly TICKRATE: number = activeWorldSettings.tickMs;
 
     private static readonly INV_STOCKRATE: number = 100; // 1m shop restocks
 

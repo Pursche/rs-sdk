@@ -1,3 +1,4 @@
+import { loadWorldExperience } from '#/util/WorldExperience.js';
 // Cache bootstrap for the lite client.
 //
 // The browser client downloads 8 JagFile archives and unpacks all of them,
@@ -89,6 +90,7 @@ export async function loadCache(opts: CacheBootstrapOptions): Promise<LoadedCach
 
     const log = opts.quiet ? () => {} : (m: string) => console.log(`[lite:cache] ${m}`);
 
+    await loadWorldExperience(opts.origin);
     const checksums = await fetchChecksums(opts.origin);
     log(`checksums ok (${checksums.length} archives)`);
 

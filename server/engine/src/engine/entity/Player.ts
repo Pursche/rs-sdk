@@ -1,3 +1,4 @@
+import { activeWorldSettings, worldExperience } from '#/util/WorldSettings.js';
 import { playerSaveStore } from '#/engine/market/MarketStore.js';
 import { PlayerInfoProt, Visibility } from '#/network/rsbuf/index.js';
 import { CollisionFlag, CollisionType } from '#/engine/routefinder/index.js';
@@ -74,15 +75,7 @@ import FriendlistLoaded from '#/network/game/server/model/FriendlistLoaded.js';
 import UpdateIgnoreList from '#/network/game/server/model/UpdateIgnoreList.js';
 import Midi from '#/cache/midi/Midi.js';
 
-const levelExperience = new Int32Array(99);
-
-let acc = 0;
-for (let i = 0; i < 99; i++) {
-    const level = i + 1;
-    const delta = Math.floor(level + Math.pow(2.0, level / 10.0) * 300.0);
-    acc += delta;
-    levelExperience[i] = Math.floor(acc / 4) * 10;
-}
+const levelExperience = Int32Array.from(worldExperience, xp => xp * 10);
 
 export function getLevelByExp(exp: number) {
     for (let i = 98; i >= 0; i--) {
@@ -1886,7 +1879,7 @@ export default class Player extends PathingEntity {
             return;
         }
 
-        const multi = allowMulti ? Environment.node.xpRate : 1;
+        const multi = allowMulti ? activeWorldSettings.xpRate : 1;
         this.stats[stat] += xp * multi;
 
         // cap to 200m, this is represented as "2 billion" because we use 32-bit signed integers and divide by 10 to give us a decimal point

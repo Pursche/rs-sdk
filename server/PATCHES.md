@@ -113,9 +113,9 @@ survival) is described in the project memory; this file is the human-readable ch
       staffmodlevel on non-production worlds** (public server safety).
 
 ### Gameplay / safety
-- [ ] **XP curve** — `entity/Player.ts` `getExpByLevel` table: delta uses `level/10.0`
-      (custom curve), table stored in ×10 "fine" units (`Math.floor(acc/4) * 10`), L99 =
-      10,701,400. **Duplicated in webclient — keep in sync (see below).**
+- [ ] **XP curve** — `entity/Player.ts` `getExpByLevel` table: delta uses `level/7.0`
+      (standard RuneScape curve), table stored in ×10 "fine" units (`Math.floor(acc/4) * 10`), L99 =
+      130,344,310 fine XP (13,034,431 real XP). **Duplicated in webclient — keep in sync (see below).**
 - [ ] **`PlayerLoading.ts`** — clamp loaded levels to base levels.
 - [ ] **Anti-grief removals** — `MessagePrivateHandler.ts` / `ReportAbuseHandler.ts`: upstream's
       automated 2-day bans REMOVED (bots trip them).
@@ -338,7 +338,7 @@ Upgrade hazards:
       **Pairs with `src/lite/protocol/incoming.ts`**, which must increment the same field.
       Verify: `grep -n "mapFlagUnsetCount" src/client/Client.ts src/lite/protocol/incoming.ts`
       (two files, one increment each), plus `bun test src/bot/StateCollector.test.ts`.
-- [ ] **XP table** — `Client.ts` `levelExperience`: same `level/10.0` curve but **NO ×10**
+- [ ] **XP table** — `Client.ts` `levelExperience`: same `level/7.0` curve but **NO ×10**
       (client receives real xp; engine stores fine xp). Verify both formulas side-by-side after
       any sync touching `Player.ts` or `Client.ts`.
 - [ ] **AFK logout extended** to 10 minutes (upstream 90s logs idle bots out).
@@ -387,6 +387,13 @@ Upgrade hazards:
 
 ---
 
+## Local control-panel world settings
+
+- Engine WorldSettings.ts owns configurable XP rewards, curve divisor, and persisted tick duration in ignored data/config/panel-world.json.
+- Player.ts derives fine-XP thresholds from that module. /world-settings publishes real-XP thresholds; browser and lite clients load them through util/WorldExperience.ts at startup.
+- The token-protected management endpoint applies ticks live or saves progression settings and requests an empty-world shutdown. The panel launches the engine again and reconnects its clients.
+- These settings replace the fixed XP-table formulas described in the upstream patch checklist above. After a sync, preserve the shared table imports and startup downloads; run WorldExperience.test.ts.
+
 ## Cross-boundary invariants (how things actually break)
 
 These are the rules derived from every severed-wire bug found so far:
@@ -397,7 +404,7 @@ These are the rules derived from every severed-wire bug found so far:
    chat for a month.) Gateway messages / bot actions / state fields degrade silently;
    game packets do not.
 2. **XP curve is duplicated** engine `Player.ts` ↔ webclient `Client.ts` (units differ ×10).
-   Change one ⇒ change both.
+   Also duplicated in lite `LiteClient.ts` and `actions.ts`; change all four together.
 3. **`MAP_RANDOM_EVENTS`** is duplicated engine opcode ↔ content rs2 command.
 4. **BotAction unions are duplicated** `sdk/types.ts` ↔ `server/webclient/src/bot/types.ts`,
    and every action needs an `ActionExecutor` case.
@@ -422,7 +429,7 @@ grep -n "MESSAGE_PUBLIC = new ServerGameProt(255" server/engine/src/network/game
 grep -n "ptype === ServerProt.MESSAGE_PUBLIC" server/webclient/src/client/Client.ts
 
 # XP curve parity (compare by eye: same formula, engine has *10, client doesn't)
-grep -A2 "Math.pow(2.0, level / 10.0)" server/engine/src/engine/entity/Player.ts server/webclient/src/client/Client.ts
+grep -A2 "Math.pow(2.0, level / 7.0)" server/engine/src/engine/entity/Player.ts server/webclient/src/client/Client.ts
 
 # boot + live endpoints after deploy
 curl -so /dev/null -w "%{http_code}\n" https://rs-sdk-demo.fly.dev/{playercount,hiscores,mapview/}

@@ -1,3 +1,4 @@
+import { worldExperience } from '#/util/WorldExperience.js';
 // The client-side action + accessor surface the bot bridge calls.
 //
 // Ported from the rs-sdk bot methods inside Client.ts. Two rules govern every
@@ -1066,22 +1067,8 @@ export function getIfVar(c: LiteClient, com: IfType, scriptId: number): number {
 }
 
 function LiteClientLevelExperience(index: number): number {
-    // Imported lazily to avoid a cycle with LiteClient's static initialiser.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return levelExperienceTable[index] ?? 0;
+    return worldExperience[index] ?? 0;
 }
-
-const levelExperienceTable: number[] = (() => {
-    const table: number[] = [];
-    let acc = 0;
-    for (let i = 0; i < 99; i++) {
-        const level = i + 1;
-        const delta = (level + Math.pow(2.0, level / 10.0) * 300.0) | 0;
-        acc += delta;
-        table[i] = (acc / 4) | 0;
-    }
-    return table;
-})();
 
 // ============================================================== dialog log
 

@@ -1,6 +1,7 @@
 import { handleMarket } from './pages/market.js';
 import { register } from 'prom-client';
 import Environment from '#/util/Environment.js';
+import { activeWorldSettings, worldExperience, worldSettingsToken, saveWorldSettings, validateWorldSettings } from '#/util/WorldSettings.js';
 import World from '#/engine/World.js';
 import { toSafeName } from '#/util/JString.js';
 import { handleClientPage, handleCacheEndpoints } from './pages/client.js';
@@ -83,6 +84,9 @@ export async function startWeb() {
 }
 
 async function handleRequest(req: Request, server: Bun.Server, url: URL): Promise<Response | undefined> {
+            if (url.pathname === '/world-settings' && req.method === 'GET')
+                return Response.json({ ...activeWorldSettings, tickMs: World.tickRate, experience: worldExperience },
+                    { headers: { 'Cache-Control': 'no-store' } });
             if (/^\/hi(?:gh)?scores(?:\/|$)/.test(url.pathname)) server.timeout(req, 60);
             // Handle WebSocket upgrades first
             const wsResponse = handleWebSocketUpgrade(req, server, url);
@@ -342,6 +346,29 @@ export async function startManagementWeb() {
     Bun.serve({
         port: Environment.WEB_MANAGEMENT_PORT,
         routes: {
+            '/world-settings': async (req: Request) => {
+                if (req.headers.get('authorization') !== `Bearer ${worldSettingsToken}` || req.headers.has('origin'))
+                    return new Response('Forbidden', { status: 403 });
+                if (req.method === 'GET') return Response.json({ ...activeWorldSettings, tickMs: World.tickRate });
+                if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+                try {
+                    const body = await req.json();
+                    if (body.action === 'tick') {
+                        const settings = validateWorldSettings({ ...activeWorldSettings, tickMs: body.tickMs });
+                        saveWorldSettings(settings);
+                        World.tickRate = settings.tickMs;
+                        activeWorldSettings.tickMs = settings.tickMs;
+                    } else if (body.action === 'restart') {
+                        if (World.getTotalPlayers() !== 0) throw new Error('Players are still online; restart refused');
+                        const settings = validateWorldSettings({ ...body, tickMs: World.tickRate });
+                        saveWorldSettings(settings);
+                        World.rebootTimer(0);
+                    } else throw new Error('Unknown world settings action');
+                    return Response.json({ ok: true });
+                } catch (error) {
+                    return Response.json({ error: String(error) }, { status: 400 });
+                }
+            },
             // computed per request (a static Response here froze the metrics at startup)
             '/prometheus': async () => new Response(await register.metrics(), {
                 headers: {

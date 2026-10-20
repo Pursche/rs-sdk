@@ -1,3 +1,4 @@
+import { worldExperience } from '#/util/WorldExperience.js';
 // A headless RS289 client that presents the exact surface the bot bridge reads.
 //
 // The bridge (src/bot/StateCollector.ts, ActionExecutor.ts) accesses the browser
@@ -208,20 +209,7 @@ export class LiteClient {
     private collector: BotStateCollector | null = null;
     private executor: ActionExecutor | null = null;
 
-    /** Per-level XP thresholds. Duplicated from Client.ts - see PATCHES.md. */
-    static levelExperience: number[] = (() => {
-        const table: number[] = [];
-        let acc = 0;
-        for (let i = 0; i < 99; i++) {
-            const level = i + 1;
-            // Custom rs-sdk curve; must stay in sync with engine Player.ts
-            // (which stores XP in x10 "fine" units) and Client.ts.
-            const delta = (level + Math.pow(2.0, level / 10.0) * 300.0) | 0;
-            acc += delta;
-            table[i] = (acc / 4) | 0;
-        }
-        return table;
-    })();
+    static levelExperience: number[] = worldExperience;
 
     constructor(opts: LiteClientOptions) {
         this.conn = opts.connection;

@@ -83,7 +83,7 @@ Warning: The demo server is offered as a convenience, and we do not guarantee up
 
 This server has a few modifications from the original game to make development and bot testing easier:
 
-- **Faster leveling** - The XP curve is accelerated and less steep.
+- **Standard level thresholds** - Uses the standard RuneScape XP curve; XP multipliers and tick rate are configured separately.
 - **Infinite run energy** - Players never run out of energy 
 - **No random events** - Anti-botting random events are disabled 
 

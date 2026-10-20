@@ -1,3 +1,4 @@
+import { worldExperience, loadWorldExperience } from '#/util/WorldExperience.js';
 import { MarketSearchInput, RESULT_ICON, visibleSearchComponent, SEARCH_FIELD } from '#/client/MarketSearchInput.js';
 import { playWave, setWaveVolume } from '#3rdparty/audio.js';
 import { stopMidi, setMidiVolume, playMidi } from '#3rdparty/tinymidipcm.js';
@@ -184,7 +185,7 @@ export class Client extends GameShell {
     static CHARSET: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"£$%^&*()-_=+[{]};:'@#~,<.>/?\\| ";
 
     static readbit = new Int32Array(32);
-    static levelExperience: number[] = [];
+    static levelExperience: number[] = worldExperience;
 
     static {
         let n = 2;
@@ -193,16 +194,7 @@ export class Client extends GameShell {
             n += n;
         }
 
-        let acc: number = 0;
-        for (let i: number = 0; i < 99; i++) {
-            const level: number = i + 1;
-            // Curve shape must match the engine (Player.ts uses level/10.0, our custom curve).
-            // NOTE: no *10 here — the engine stores XP in ×10 "fine" units and its table has *10,
-            // but the server sends the client REAL xp (÷10), so the client table is in real-xp units.
-            const delta: number = (level + Math.pow(2.0, level / 10.0) * 300.0) | 0;
-            acc += delta;
-            Client.levelExperience[i] = (acc / 4) | 0;
-        }
+
     }
 
     private alreadyStarted: boolean = false;
@@ -3252,6 +3244,7 @@ export class Client extends GameShell {
     // ----
 
     override async maininit() {
+        await loadWorldExperience(location.origin);
         if (this.isMobile && Client.lowMem) {
             // force mobile on low detail mode to 30 fps
             this.setTargetedFramerate(30);
