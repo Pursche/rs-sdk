@@ -535,6 +535,15 @@ describe('clickComponent', () => {
 });
 
 describe('getDialogOptions', () => {
+    test('browser and lite remove literal cache newline escapes from smelting labels',async()=>{
+        const browser=await import('../client/Client.js');
+        const lite=await import('../lite/actions.js');
+        for(const normalise of [browser.normaliseComponentText,lite.normaliseComponentText]) {
+            expect(normalise('\\n\\n\\n\\n@lre@Bronze')).toBe('Bronze');
+            expect(normalise('\\n\\n')).toBe('');
+            expect(normalise('Smelt X @lre@Bronze')).toBe('Smelt X Bronze');
+        }
+    });
     test('flattens the layout newlines skill dialogs pad product labels with', () => {
         // skill_multi3, as fletching opens it: Make X / Make 10 / Make 5 /
         // <product>, and only the make-1 button carries a name.

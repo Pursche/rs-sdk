@@ -4,7 +4,7 @@ import Environment from './Environment.js';
 
 const path = 'data/config/panel-world.json';
 const tokenPath = 'data/config/panel-world.token';
-export type WorldSettings = { xpRate: number; curveDivisor: number; tickMs: number };
+export type WorldSettings = { xpRate: number; curveDivisor: number; tickMs: number; stockDependentShopPricing?: boolean; unlimitedGeneralStoreSales?: boolean };
 
 export function validateWorldSettings(value: WorldSettings): WorldSettings {
     if (!Number.isFinite(value.xpRate) || value.xpRate < 0.1 || value.xpRate > 100)
@@ -13,7 +13,13 @@ export function validateWorldSettings(value: WorldSettings): WorldSettings {
         throw new Error('Curve divisor must be between 7 and 20');
     if (!Number.isInteger(value.tickMs) || value.tickMs < 100 || value.tickMs > 2000)
         throw new Error('Tick duration must be an integer between 100 and 2000 ms');
-    return { xpRate: value.xpRate, curveDivisor: value.curveDivisor, tickMs: value.tickMs };
+    if (value.stockDependentShopPricing !== undefined && typeof value.stockDependentShopPricing !== 'boolean')
+        throw new Error('Stock-dependent shop pricing must be a boolean');
+    if (value.unlimitedGeneralStoreSales !== undefined && typeof value.unlimitedGeneralStoreSales !== 'boolean')
+        throw new Error('Unlimited general-store sales must be a boolean');
+    return { xpRate: value.xpRate, curveDivisor: value.curveDivisor, tickMs: value.tickMs,
+        stockDependentShopPricing: value.stockDependentShopPricing ?? false,
+        unlimitedGeneralStoreSales: value.unlimitedGeneralStoreSales ?? true };
 }
 
 export const activeWorldSettings = validateWorldSettings(fs.existsSync(path)

@@ -28,6 +28,7 @@ import type {
     TalkResult,
     ShopResult,
     ShopSellResult,
+    ShopPriceResult,
     SellAmount,
     EquipResult,
     UnequipResult,
@@ -696,7 +697,7 @@ export class BotActions {
         }
     }
 
-    /** Chop a tree and wait for logs to appear in inventory. */
+    /** Chop a tree and wait for logs to appear in inventory. Fresh level refusals return level_too_low with requiredLevel immediately. */
     async chopTree(target?: NearbyLoc | string | RegExp): Promise<ChopTreeResult> {
         await this.dismissBlockingUI();
 
@@ -706,6 +707,7 @@ export class BotActions {
         }
 
         const logsBefore = this.sdk.countInventoryItems(/logs/i);
+        const refusal = this.helpers.freshRefusal(['need a woodcutting level', 'inventory is too full', 'need an axe', 'do not have an axe', "can't reach", 'cannot reach']);
         const result = await this.sdk.sendInteractLoc(tree.x, tree.z, tree.id, 1);
 
         if (!result.success) {
@@ -719,10 +721,17 @@ export class BotActions {
         try {
             const finalState = await this.sdk.waitForCondition(state => {
                 if (countItems(state.inventory, /logs/i) > logsBefore) return true;
+                if (refusal()) return true;
                 return !state.nearbyLocs.some(l => l.x === tree.x && l.z === tree.z && l.id === tree.id);
             }, 30000);
 
             if (countItems(finalState.inventory, /logs/i) <= logsBefore) {
+                const message = refusal();
+                if (message) {
+                    const requiredLevel = /need a woodcutting level of\s+(\d+)/i.exec(message);
+                    return { success:false, message, reason:requiredLevel?'level_too_low':'rejected',
+                        ...(requiredLevel ? {requiredLevel:Number(requiredLevel[1])} : {}) };
+                }
                 return { success: false, message: `${tree.name} was felled by someone else` };
             }
 
@@ -1065,7 +1074,7 @@ export class BotActions {
         }
     }
 
-    /** Walk to coordinates using pathfinding, auto-opening doors. Bounds the whole route with options.timeout (default 120s), refuses stale state, and aborts on cancellation or death. */
+    /** Walk to coordinates using pathfinding, auto-opening doors. options.timeout is MILLISECONDS, default 120000 (two minutes); 180 means 180 milliseconds, not three minutes. Omit it for the default. Refuses stale state and aborts on cancellation or death. */
     async walkTo(x: number, z: number, tolerance: number = 3, options: { timeout?: number } = {}): Promise<ActionResult> {
         const timeout = options.timeout ?? 120_000;
         if (!Number.isFinite(timeout) || timeout <= 0 || !Number.isFinite(tolerance) || tolerance < 0) {
@@ -1516,8 +1525,49 @@ export class BotActions {
      *
      * `success` is true only when the full requested amount was sold; a short
      * fill returns `success: false` with `partial: true` and `amountSold`.
+     * Check coinsReceived for income: an overstocked shop can legally pay 0 GP.
+     * Use getShopSellPrice before selling to check the current server offer.
      */
     async sellToShop(target: InventoryItem | ShopItem | string | RegExp, amount: SellAmount = 1): Promise<ShopSellResult> {
+        // The shop side inventory is authoritative while the shop is open.
+        // Selling for zero is legal; removing an item does not prove income.
+        const coins = () => {
+            const state = this.sdk.getState();
+            const items = state?.shop.isOpen ? state.shop.playerItems : this.sdk.getInventory();
+            return items.filter(item => item.id === 995).reduce((sum, item) => sum + item.count, 0);
+        };
+        const before = coins();
+        const result = await this.sellToShopOnce(target, amount);
+        const coinsReceived = Math.max(0, coins() - before);
+        return { ...result, coinsReceived,
+            message: result.amountSold ? `${result.message}; received ${coinsReceived} GP` : result.message };
+    }
+
+    /** Read the server's current per-item selling offer via Value, without selling. ShopItem.sellPrice is only a stock-independent estimate. */
+    async getShopSellPrice(target: InventoryItem | ShopItem | string | RegExp): Promise<ShopPriceResult> {
+        const shop = this.sdk.getState()?.shop;
+        if (!shop?.isOpen) return { success: false, message: 'Shop is not open' };
+        const item = this.helpers.resolveShopItem(target, shop.playerItems);
+        if (!item) return { success: false, message: `Item not found to value: ${target}` };
+        const baseline = this.helpers.getMessageTick();
+        const quote = (state: BotWorldState) => state.gameMessages.find(message =>
+            this.helpers.isMessageAfter(message, baseline) &&
+            message.text.startsWith(`${item.name}: shop will buy for `) && /\d+gp\.$/.test(message.text));
+        const refused = () => this.helpers.findRefusal(baseline, ["can't sell this item"]);
+        const sent = await this.sdk.sendClickComponentWithOption(3823, 1, item.slot);
+        if (!sent.success) return { success: false, message: sent.message };
+        try {
+            const state = await this.sdk.waitForCondition(state => Boolean(quote(state)) || Boolean(refused()), 5000);
+            const message = quote(state);
+            if (message) return { success: true, price: Number(/(\d+)gp\.$/.exec(message.text)![1]), message: message.text };
+            return { success: false, message: refused() ?? 'Shop refused valuation' };
+        } catch {
+            throwIfExecutionAborted();
+            return { success: false, message: 'Timed out waiting for the shop selling offer' };
+        }
+    }
+
+    private async sellToShopOnce(target: InventoryItem | ShopItem | string | RegExp, amount: SellAmount): Promise<ShopSellResult> {
         // Bank deposits spell "everything" as -1; accept it here for parity.
         if (amount === -1) amount = 'all';
         const validated = amount === 'all'
@@ -2031,9 +2081,10 @@ export class BotActions {
      * first (and synced back to items on the next plain withdrawal), and
      * completion is detected on the noted item's arrival. Items the engine
      * cannot note are withdrawn unnoted with a game message; the result then
-     * carries the unnoted item.
+     * carries the unnoted item. Pass {id: itemId} for an explicit ID, a fresh
+     * BankItem or an exact name. Bare numeric targets are bank SLOT indices.
      */
-    async withdrawItem(target: BankItem | string | RegExp | number, amount: number = 1, options: { asNote?: boolean } = {}): Promise<BankWithdrawResult> {
+    async withdrawItem(target: BankItem | { id: number } | string | RegExp | number, amount: number = 1, options: { asNote?: boolean } = {}): Promise<BankWithdrawResult> {
         const validated = validateActionQuantity(amount, { allowAll: true, max: MAX_BANK_ACTION_QUANTITY });
         if (!validated.valid) {
             return { success: false, message: validated.message, reason: 'invalid_amount' };
@@ -2050,13 +2101,16 @@ export class BotActions {
         let bankItem: BankItem | undefined;
         if (typeof target === 'number') {
             bankItem = state.bank.items.find(i => i.slot === target);
-        } else if (typeof target === 'object' && 'slot' in target) {
-            bankItem = state.bank.items.find(i => i.slot === target.slot && i.id === target.id)
+        } else if (typeof target === 'object' && 'id' in target) {
+            bankItem = state.bank.items.find(i => 'slot' in target && i.slot === target.slot && i.id === target.id)
                 ?? state.bank.items.find(i => i.id === target.id);
         } else {
             bankItem = this.sdk.findBankItem(target) ?? undefined;
         }
         if (!bankItem) {
+            if (typeof target === 'number' && state.bank.items.some(i => i.id === target)) {
+                return { success: false, message: `withdrawItem(number) expects a bank SLOT, not item ID ${target}. Pass the current BankItem from getBankItems().find(i => i.id === ${target}), or an exact item name.`, reason: 'item_not_found' };
+            }
             return { success: false, message: `Bank item not found: ${target}`, reason: 'item_not_found' };
         }
         const itemId = bankItem.id;
@@ -3817,6 +3871,7 @@ export class BotActions {
         'throwing knives': { component: 1123, slot: 2 },
         'knives': { component: 1123, slot: 2 },
         'nails': { component: 1123, slot: 3 },
+        'wire': { component: 1123, slot: 3 },
     };
 
     /**
@@ -3886,6 +3941,9 @@ export class BotActions {
             const key = metalMatch
                 ? product.toLowerCase().slice(metalMatch[0].length).trim()
                 : product.toLowerCase();
+              if ((key === 'wire' && !/^bronze bar$/i.test(bar.name)) || (key === 'nails' && !/^steel bar$/i.test(bar.name))) {
+                  return { success: false, message: `${key} is not a recipe for ${bar.name}`, reason: 'unknown_product' };
+              }
             const directMatch = BotActions.SMITHING_COMPONENTS[key];
             if (directMatch) {
                 componentId = directMatch.component;
@@ -3902,7 +3960,7 @@ export class BotActions {
                     componentId = partialMatch.component;
                     componentSlot = partialMatch.slot;
                 } else {
-                    return { success: false, message: `Unknown smithing product: ${product}`, reason: 'level_too_low' };
+                    return { success: false, message: `Unknown smithing product: ${product}`, reason: 'unknown_product' };
                 }
             }
         }
@@ -3919,7 +3977,7 @@ export class BotActions {
                 const named = this.sdk.findInventoryItem(new RegExp(product.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
                 if (named) return named;
             }
-            return this.sdk.findInventoryItem(/dagger|(?<!pick)axe|mace|helm|sword|shield|body|legs|skirt|claws|knives|bolts|arrowtips|arrowheads|arrow|dart|nails/i);
+                return this.sdk.findInventoryItem(/dagger|(?<!pick)axe|mace|helm|sword|shield|body|legs|skirt|claws|knives|bolts|arrowtips|arrowheads|arrow|dart|nails|wire/i);
         };
 
         // Use bar on anvil
@@ -4009,7 +4067,7 @@ export class BotActions {
         // Final XP check
         const finalXp = this.sdk.getSkill('Smithing')?.experience || 0;
         if (finalXp > smithingBefore) {
-            const smithedItem = this.sdk.findInventoryItem(/dagger|axe|mace|helm|sword|shield|body|legs|skirt|claws|knives|bolts|arrowtips|arrowheads|arrow|dart/i);
+            const smithedItem = findSmithedItem();
             return {
                 success: true,
                 message: 'Smithed item successfully',
@@ -4024,7 +4082,7 @@ export class BotActions {
 
     // ============ Porcelain: Generic Interactions ============
 
-    /** Mine a rock and wait for new ore plus Mining XP. Rock names have a "Rocks" prefix: use /copper ore/i for rocks and /^copper ore$/i for inventory. */
+    /** Mine a rock and wait for new ore plus Mining XP. Fresh dialogue/message refusals return immediately; level_too_low includes requiredLevel. Rock names have a "Rocks" prefix: use /copper ore/i for rocks and /^copper ore$/i for inventory. */
     async mineRock(target: NearbyLoc | string | RegExp = /rocks?/i, options: { timeout?: number } = {}): Promise<MineRockResult> {
         const timeout = options.timeout ?? 30_000;
         if (!Number.isFinite(timeout) || timeout <= 0) return { success: false, reason: 'timeout', message: 'mineRock requires a positive finite timeout', oresMined: 0, xpGained: 0 };
@@ -4044,7 +4102,9 @@ export class BotActions {
             const walk = await this.walkTo(rock.x, rock.z, 2);
             if (!walk.success) return fail('cant_reach', walk.message);
         }
-        const current = this.helpers.refindLocation(rock) ?? rock;
+        const visible = this.helpers.refindLocation(rock);
+        if (!visible) return fail('depleted', 'Mining target changed or depleted before interaction; select a fresh observed rock');
+        const current = {...visible};
         const mine = current.optionsWithIndex.find(option => /^mine$/i.test(option.text));
         if (!mine) return fail('no_matching_option', `${current.name} has no Mine option`);
 
@@ -4060,23 +4120,38 @@ export class BotActions {
             return state.inventory.find(item => matchesOre(item) && (amounts.get(item.id) ?? 0) > (before.get(item.id) ?? 0));
         };
         const miningXp = (state: BotWorldState) => state.skills.find(skill => /^mining$/i.test(skill.name))?.experience ?? xp;
-        const baseline = this.helpers.getMessageTick();
-        const rejection = this.helpers.opRejectionCursor();
-        const refusals = ['need a mining level', 'need a pickaxe', 'do not have a pickaxe', "can't reach", 'cannot reach', 'no ore'];
+        const refusals = ['need a mining level', 'need a pickaxe', 'do not have a pickaxe', "can't reach", 'cannot reach', 'no ore', 'no minerals', 'inventory is too full'];
+        const refusal = this.helpers.freshRefusal(refusals);
+        let changedTick:number|null=null;
+        const depleted=(state:BotWorldState)=>{
+            const loc=state.nearbyLocs.find(l=>l.x===current.x&&l.z===current.z&&l.id===current.id);
+            // Allow inventory and XP packets to settle after the rock changes.
+            // Preserve the first change even if it respawns before the next sample.
+            if(!loc&&changedTick===null)changedTick=state.tick;
+            return changedTick!==null&&state.tick>=changedTick+2;
+        };
         const interaction = await this.sdk.sendInteractLoc(current.x, current.z, current.id, mine.opIndex);
         if (!interaction.success) return fail(interaction.reason === 'cant_reach' ? 'cant_reach' : 'rejected', interaction.message);
         try {
             const final = await this.sdk.waitForCondition(state =>
                 (Boolean(gainedOre(state)) && miningXp(state) > xp) ||
-                this.helpers.wasOpRejectedSince(rejection, state) ||
-                Boolean(this.helpers.findRefusal(baseline, refusals)), timeout);
+                // UNSET_MAP_FLAG is only a rejection heuristic: a successful
+                // stationary mining action can emit it before ore/XP arrive.
+                // Wait for completion or an explicit refusal, within timeout.
+                Boolean(refusal()) || depleted(state), timeout);
             const ore = gainedOre(final);
             const xpGained = miningXp(final) - xp;
             if (ore && xpGained > 0) {
                 const count = final.inventory.filter(item => item.id === ore.id).reduce((sum, item) => sum + item.count, 0);
                 return { success: true, message: `Mined ${ore.name}`, ore, oresMined: count - (before.get(ore.id) ?? 0), xpGained };
             }
-            return fail('rejected', this.helpers.findRefusal(baseline, refusals) ?? 'Mining operation was rejected');
+            const refusalMessage=refusal();
+            if(!refusalMessage&&changedTick!==null)return fail('depleted', 'Mining target depleted without an observed ore gain; select another fresh rock');
+            const message = refusalMessage ?? 'Mining operation was rejected';
+            if(/no (?:ore|minerals)/i.test(message))return fail('depleted',message);
+            const requiredLevel = /need a mining level of\s+(\d+)/i.exec(message);
+            if (requiredLevel) return { ...fail('level_too_low', message), requiredLevel: Number(requiredLevel[1]) };
+            return fail('rejected', message);
         } catch {
             throwIfExecutionAborted();
             return fail('timeout', `No ${oreName ?? 'ore'} gained from ${rock.name} within ${timeout}ms`);

@@ -1,3 +1,4 @@
+import { refreshDisplayNames } from '#/datastruct/DisplayNames.js';
 import { worldExperience, loadWorldExperience } from '#/util/WorldExperience.js';
 import { MarketSearchInput, RESULT_ICON, visibleSearchComponent, SEARCH_FIELD } from '#/client/MarketSearchInput.js';
 import { playWave, setWaveVolume } from '#3rdparty/audio.js';
@@ -111,6 +112,7 @@ export function normaliseComponentText(raw: string | null | undefined): string {
     if (!raw) return '';
     return raw
         .replace(/@\w{3}@/g, '')
+        .replace(/\\n/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -509,6 +511,8 @@ export class Client extends GameShell {
 
     private chatModalId: number = -1;
     private mainModalId: number = -1;
+    /** Inventory transmission can stop one tick before the bank modal closes. */
+    bankContentsKnown = false;
     private sideModalId: number = -1;
     private mainOverlayId: number = -1;
     private lastOverComId: number = 0;
@@ -3243,7 +3247,16 @@ export class Client extends GameShell {
 
     // ----
 
+    private displayNamesTimer?: ReturnType<typeof setInterval>;
+
     override async maininit() {
+        const refreshNames = async () => {
+            await refreshDisplayNames(location.origin);
+            this.friendUsername = this.friendUsername.map(name => name === null ? null : JString.toScreenName(name));
+            this.chatUsername = this.chatUsername.map(name => name === null ? null : JString.toScreenName(name));
+        };
+        await refreshNames();
+        this.displayNamesTimer = setInterval(() => void refreshNames(), 30_000);
         await loadWorldExperience(location.origin);
         if (this.isMobile && Client.lowMem) {
             // force mobile on low detail mode to 30 fps
@@ -3722,6 +3735,7 @@ export class Client extends GameShell {
     }
 
     protected override mainquit(): void {
+        clearInterval(this.displayNamesTimer);
         this.stream?.close();
         this.stream = null;
 
@@ -8791,6 +8805,7 @@ export class Client extends GameShell {
 
             if (this.ptype === ServerProt.UPDATE_INV_STOP_TRANSMIT) {
                 const comId = this.in.g2();
+                if (comId === 5382) this.bankContentsKnown = false;
                 const inv: IfType = IfType.list[comId];
 
                 if (!inv.linkObjType || !inv.linkObjNumber) {
@@ -8833,6 +8848,8 @@ export class Client extends GameShell {
                     inv.linkObjType[i] = 0;
                     inv.linkObjNumber[i] = 0;
                 }
+
+                if (comId === 5382) this.bankContentsKnown = true;
 
                 this.ptype = -1;
                 return true;

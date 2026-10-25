@@ -14,7 +14,7 @@ let dialect: Dialect;
 // telemetry compaction during a post-deploy reconnect storm) starves login queries and
 // players see "login server offline". WAL adds db.sqlite-wal/-shm files; file-copy
 // backups must checkpoint first (sqlite3 db.sqlite ".backup out.db").
-const SQLITE_PRAGMAS = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 10000;";
+const SQLITE_PRAGMAS = "PRAGMA busy_timeout = 10000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
 
 if (Environment.db.backend === 'sqlite') {
     // rs-sdk: Bun has no node:sqlite — pick the dialect for the active runtime.

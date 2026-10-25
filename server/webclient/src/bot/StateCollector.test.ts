@@ -77,6 +77,16 @@ function createClient() {
 }
 
 describe('BotStateCollector combat state', () => {
+    test('bank closing readiness is published separately from modal visibility', () => {
+        const client = createClient();
+        client.isBankOpen = () => true;
+        client.getBankItems = () => [];
+        client.bankContentsKnown = false;
+        const collector = new BotStateCollector(client);
+        expect((collector as any).collectBankState()).toMatchObject({isOpen:true,contentsKnown:false,items:[]});
+        client.bankContentsKnown = true;
+        expect((collector as any).collectBankState()).toMatchObject({isOpen:true,contentsKnown:true,items:[]});
+    });
     test('uses the public tick for damage events and faceEntity for targeting', () => {
         const client = createClient();
         const collector = new BotStateCollector(client);

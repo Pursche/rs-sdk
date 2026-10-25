@@ -19,6 +19,7 @@ import InvType from '#/cache/config/InvType.js';
 import ObjType from '#/cache/config/ObjType.js';
 import VarPlayerType from '#/cache/config/VarPlayerType.js';
 import { outfitAppearance } from '#/server/login/OutfitAppearance.js';
+import { accountDeleted } from '#/util/DeleteCharacter.js';
 
 // bcrypt-ts is pure JS: one compare pins this thread for ~50-200ms. Prod outage
 // 2026-08-17: a reconnect stampede after a redeploy (~5 auths/s across fleets and
@@ -368,7 +369,7 @@ export default class LoginServer {
             printWarning('qp varp is not scope=perm - the quest points hiscore will not update');
         }
 
-        this.server = new WebSocketServer({ port: Environment.login.port, host: '0.0.0.0' }, () => {
+        this.server = new WebSocketServer({ port: Environment.login.port, host: process.env.BIND_HOST || '0.0.0.0' }, () => {
             printInfo(`Login server listening on port ${Environment.login.port}`);
         });
 
@@ -402,6 +403,11 @@ export default class LoginServer {
                     } else if (type === 'player_login') {
                         const { nodeMembers, replyTo, username, password, uid, socket, remoteAddress, reconnecting, hasSave } = msg;
                         const safeName = toSafeName(username);
+
+                        if (Environment.db.backend === 'sqlite' && accountDeleted(safeName)) {
+                            s.send(JSON.stringify({ replyTo, response: 4 }));
+                            return;
+                        }
 
                         if (this.loginRequests.has(safeName)) {
                             s.send(
@@ -827,6 +833,11 @@ export default class LoginServer {
                         // resolve to the same account row.
                         const username = toSafeName(msg.username);
 
+                        if (Environment.db.backend === 'sqlite' && accountDeleted(username)) {
+                            s.send(JSON.stringify({ replyTo, success: false, error: 'Account was deleted' }));
+                            return;
+                        }
+
                         let account = await db.selectFrom('account')
                             .where('username', '=', username)
                             .select(['id', 'password', 'banned_until'])
@@ -892,7 +903,7 @@ export default class LoginServer {
 
                         const sdkPasswordMatch = account ? await comparePassword(password, account.password) : false;
 
-                        if (!account || !sdkPasswordMatch) {
+                        if (!account || !sdkPasswordMatch || (Environment.db.backend === 'sqlite' && accountDeleted(username))) {
                             s.send(JSON.stringify({
                                 replyTo,
                                 success: false,

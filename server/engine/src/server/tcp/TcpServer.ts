@@ -67,6 +67,6 @@ export default class TcpServer {
             });
         });
 
-        this.tcp.listen(Environment.node.port, '0.0.0.0', () => {});
+        this.tcp.listen(Environment.node.port, process.env.BIND_HOST || '0.0.0.0', () => {});
     }
 }

@@ -15,6 +15,7 @@ import { handleDisclaimerPage, handleMapviewPage, handlePublicFiles } from './pa
 import { WebSocketData, handleWebSocketUpgrade, handleGatewayEndpointGet, websocketHandlers } from './websocket.js';
 import { getIp } from './utils.js';
 import { getPlayerPositionsJson } from './worldfeed.js';
+import { deleteLocalCharacter } from '#/util/DeleteCharacter.js';
 
 export type { WebSocketData };
 
@@ -70,6 +71,7 @@ export function getWebStats() {
 export async function startWeb() {
     Bun.serve<WebSocketData, WebSocketRoutes>({
         port: Environment.WEB_PORT,
+        hostname: process.env.BIND_HOST || '0.0.0.0',
         async fetch(req, server) {
             const url = new URL(req.url ?? '', `http://${req.headers.get('host')}`);
             const start = Date.now();
@@ -345,7 +347,24 @@ let profileRunning = false;
 export async function startManagementWeb() {
     Bun.serve({
         port: Environment.WEB_MANAGEMENT_PORT,
+        hostname: process.env.BIND_HOST || '0.0.0.0',
         routes: {
+            '/delete-character': async (req: Request) => {
+                if (req.headers.get('authorization') !== `Bearer ${worldSettingsToken}` || req.headers.has('origin'))
+                    return new Response('Forbidden', { status: 403 });
+                if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+                try {
+                    if (Environment.db.backend !== 'sqlite' || !Environment.easyStartup || process.env.BIND_HOST !== '127.0.0.1')
+                        throw new Error('Deletion requires the local single-world SQLite server');
+                    const { name } = await req.json();
+                    if (typeof name !== 'string' || !/^[a-zA-Z0-9]{1,12}$/.test(name)) throw new Error('Invalid managed character name');
+                    const username = name.toLowerCase();
+                    if (World.getPlayerByUsername(username) || World.logoutRequests.has(username) || World.loginRequests.size || World.newPlayers.size)
+                        throw new Error('Wait for logout and pending logins to finish before deleting');
+                    deleteLocalCharacter(username, '.', process.env.GE_DATABASE);
+                    return Response.json({ ok: true });
+                } catch (error) { return Response.json({ error: String(error) }, { status: 400 }); }
+            },
             '/world-settings': async (req: Request) => {
                 if (req.headers.get('authorization') !== `Bearer ${worldSettingsToken}` || req.headers.has('origin'))
                     return new Response('Forbidden', { status: 403 });
@@ -358,9 +377,19 @@ export async function startManagementWeb() {
                         saveWorldSettings(settings);
                         World.tickRate = settings.tickMs;
                         activeWorldSettings.tickMs = settings.tickMs;
+                    } else if (body.action === 'shop-pricing') {
+                        if (typeof body.stockDependentShopPricing !== 'boolean') throw new Error('Choose a shop pricing mode');
+                        const settings = validateWorldSettings({ ...activeWorldSettings, stockDependentShopPricing: body.stockDependentShopPricing });
+                        saveWorldSettings(settings);
+                        activeWorldSettings.stockDependentShopPricing = settings.stockDependentShopPricing;
+                    } else if (body.action === 'shop-capacity') {
+                        if (typeof body.unlimitedGeneralStoreSales !== 'boolean') throw new Error('Choose a general-store sales mode');
+                        const settings = validateWorldSettings({ ...activeWorldSettings, unlimitedGeneralStoreSales: body.unlimitedGeneralStoreSales });
+                        saveWorldSettings(settings);
+                        activeWorldSettings.unlimitedGeneralStoreSales = settings.unlimitedGeneralStoreSales;
                     } else if (body.action === 'restart') {
                         if (World.getTotalPlayers() !== 0) throw new Error('Players are still online; restart refused');
-                        const settings = validateWorldSettings({ ...body, tickMs: World.tickRate });
+                        const settings = validateWorldSettings({ ...activeWorldSettings, ...body, tickMs: World.tickRate });
                         saveWorldSettings(settings);
                         World.rebootTimer(0);
                     } else throw new Error('Unknown world settings action');

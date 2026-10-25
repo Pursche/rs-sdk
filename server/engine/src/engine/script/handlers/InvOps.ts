@@ -15,6 +15,7 @@ import { CommandHandlers } from '#/engine/script/ScriptRunner.js';
 import { CategoryTypeValid, check, CoordValid, DurationValid, InvTypeValid, NumberNotNull, ObjStackValid, ObjTypeValid } from '#/engine/script/ScriptValidators.js';
 import World from '#/engine/World.js';
 import { WealthEventType } from '#/server/logger/WealthEventType.js';
+import { activeWorldSettings } from '#/util/WorldSettings.js';
 
 const InvOps: CommandHandlers = {
     // inv config
@@ -300,7 +301,11 @@ const InvOps: CommandHandlers = {
             throw new Error(`$count is out of range: ${count}`);
         }
 
-        state.pushInt(state.activePlayer.invItemSpace(invType.id, objType.id, count, size) === 0 ? 1 : 0);
+        // General shops may act as an unlimited NPC coin source. The existing
+        // move handler discards stock overflow; player coin space and item-sale
+        // restrictions remain enforced by the normal shop transaction script.
+        state.pushInt((activeWorldSettings.unlimitedGeneralStoreSales && invType.allstock) ||
+            state.activePlayer.invItemSpace(invType.id, objType.id, count, size) === 0 ? 1 : 0);
     },
 
     // inv read

@@ -43,6 +43,31 @@ function mountSdk(state: BotWorldState | null): { sdk: BotSDK; calls: number[]; 
 }
 
 describe('clickDialogByText()', () => {
+    test('rejects ambiguous production choices instead of silently selecting Smelt X', async () => {
+        const { sdk, actions } = mountSdk(makeState({ dialogOpen: true, options: [
+            makeOption(1, 'Smelt X Bronze'), makeOption(2, 'Smelt 10 Bronze'), makeOption(3, 'Smelt 5 Bronze'), makeOption(4, '\\n\\n\\n\\nBronze')
+        ] }));
+        expect(await sdk.clickDialogByText(/bronze/i)).toMatchObject({success:false,reason:'ambiguous_match'});
+        expect(actions).toEqual([]);
+        expect(await sdk.clickDialogByText(/^Bronze$/i)).toMatchObject({success:true});
+        expect(actions[0]).toMatchObject({type:'clickDialogOption',optionIndex:4});
+    });
+
+    test('stateful regex selectors are reset for each visible choice', async () => {
+        const {sdk,calls}=mountSdk(makeState({dialogOpen:true,options:[makeOption(1,'No'),makeOption(2,'Yes')]}));
+        const pattern=/yes/gi;pattern.lastIndex=3;
+        expect(await sdk.clickDialogByText(pattern)).toMatchObject({success:true});
+        expect(calls).toEqual([2]);
+    });
+
+    test('sendWait observes server ticks without dispatching the legacy client-frame wait action',async()=>{
+        const {sdk,actions}=mountSdk(makeState({dialogOpen:false}));
+        const waited:number[]=[];
+        sdk.waitForTicks=async ticks=>{waited.push(ticks!);return {} as BotWorldState;};
+        expect(await sdk.sendWait(5)).toMatchObject({success:true,message:'Waited 5 server ticks'});
+        expect(waited).toEqual([5]);expect(actions).toEqual([]);
+        expect(sdk.sendWait(0)).rejects.toThrow('positive integer');
+    });
     test('sends the page token and exact component ID selected from that snapshot', async () => {
         const { sdk, actions } = mountSdk(makeState({ dialogOpen: true, options: [makeOption(2, 'Yes')] }));
         expect((await sdk.clickDialogByText('yes')).success).toBe(true);

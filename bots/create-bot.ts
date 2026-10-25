@@ -81,7 +81,7 @@ async function createBot(username?: string, serverOverride?: string, hideChat?: 
         // The lite runner builds its cache origin from SERVER, so a bare
         // 'localhost' dials port 80; and SERVER with a port would then be
         // mistaken for the gateway. Name both explicitly.
-        await replaceInFile(envPath, { 'SERVER=localhost\n': 'SERVER=localhost:8888\nGATEWAY_URL=ws://localhost:7780\n' });
+        await replaceInFile(envPath, { 'SERVER=localhost': 'SERVER=localhost:8888\nGATEWAY_URL=ws://localhost:7780' });
         console.log(`Local stack: engine at localhost:8888, gateway at ws://localhost:7780`);
     }
 

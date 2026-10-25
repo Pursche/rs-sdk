@@ -28,6 +28,7 @@ public/runescape*.jar
 # built clients are served from webclient/out; a copy here shadows fresh builds
 public/client/*.js
 public/client/*.js.map
+public/display-names.json*
 
 ### Windows ###
 Thumbs.db

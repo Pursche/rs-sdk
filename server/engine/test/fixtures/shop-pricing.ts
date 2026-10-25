@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { mock } from 'bun:test';
+import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
+class TestWorker extends EventEmitter { postMessage() {} }
+mock.module('worker_threads',()=>({Worker:TestWorker}));
+await import('../../src/engine/World.js');
+const {default:VarPlayerType}=await import('../../src/cache/config/VarPlayerType.js');
+const {default:Player}=await import('../../src/engine/entity/Player.js');
+const {activeWorldSettings,validateWorldSettings,saveWorldSettings}=await import('../../src/util/WorldSettings.js');
+VarPlayerType.load(process.env.BANK_TEST_CACHE!);
+const player=new Player('shoptest',1n,1n);
+const haggle=VarPlayerType.getId('shop_haggle'),buy=VarPlayerType.getId('shop_buy'),sell=VarPlayerType.getId('shop_sell');
+assert.ok(haggle>=0 && buy>=0 && sell>=0);
+player.setVar(haggle,30);player.setVar(buy,400);player.setVar(sell,1300);
+assert.equal(activeWorldSettings.stockDependentShopPricing,false);
+assert.equal(player.getVar(haggle),0);
+assert.equal(player.getVar(buy),400);assert.equal(player.getVar(sell),1300);
+activeWorldSettings.stockDependentShopPricing=true;
+assert.equal(player.getVar(haggle),30);
+activeWorldSettings.stockDependentShopPricing=false;
+assert.equal(player.getVar(haggle),0);
+player.setVar(haggle,20); // open another shop while disabled
+activeWorldSettings.stockDependentShopPricing=true;
+assert.equal(player.getVar(haggle),20);
+assert.equal(validateWorldSettings({xpRate:1,curveDivisor:7,tickMs:600}).stockDependentShopPricing,false);
+assert.throws(()=>validateWorldSettings({...activeWorldSettings,stockDependentShopPricing:'false' as any}),/boolean/);
+saveWorldSettings({...activeWorldSettings,stockDependentShopPricing:false});
+assert.equal(JSON.parse(readFileSync('data/config/panel-world.json','utf8')).stockDependentShopPricing,false);
+console.log('Shop pricing checks passed');process.exit(0);

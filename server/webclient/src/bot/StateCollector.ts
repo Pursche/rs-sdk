@@ -1434,9 +1434,9 @@ export class BotStateCollector implements ScanProvider {
             // Read shop configuration from varps (127=shop_buy, 128=shop_sell, 129=shop_haggle)
             const varps = c.var || [];
             const shopConfig: ShopConfig = {
-                buyMultiplier: varps[127] || 60,    // Default from shopkeeper.param
-                sellMultiplier: varps[128] || 100,  // Default from shopkeeper.param
-                haggle: varps[129] || 10,           // Default from shopkeeper.param
+                buyMultiplier: varps[127] ?? 60,    // Default from shopkeeper.param
+                sellMultiplier: varps[128] ?? 100,  // Default from shopkeeper.param
+                haggle: varps[129] ?? 10,           // Default from shopkeeper.param
             };
             shopState.shopConfig = shopConfig;
 
@@ -1454,6 +1454,7 @@ export class BotStateCollector implements ScanProvider {
         const c = this.client as any;
         const bankState: BankState = {
             isOpen: false,
+            contentsKnown: c.bankContentsKnown !== false,
             items: [],
             // varp 115 = %bankcert (varp.pack), the note/item withdrawal toggle.
             noteMode: (c.var?.[115] ?? 0) === 1
@@ -1588,7 +1589,9 @@ export class BotStateCollector implements ScanProvider {
                         baseCost = obj.cost || 1;
                     } catch { /* ignore */ }
 
-                    // Calculate prices using shop config (stockDiff=0 for price at current stock)
+                    // Base stock and shop_haggle are not fully transmitted to
+                    // clients. These are estimates at stockDiff=0, not current
+                    // server quotes. Use the shop's Value operation to verify.
                     let buyPrice = baseCost;
                     let sellPrice = baseCost;
                     if (shopConfig) {
@@ -1607,7 +1610,8 @@ export class BotStateCollector implements ScanProvider {
                         count,
                         baseCost,
                         buyPrice,
-                        sellPrice
+                        sellPrice,
+                        pricesEstimated: true
                     });
                 }
             }

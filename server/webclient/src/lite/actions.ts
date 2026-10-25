@@ -50,6 +50,7 @@ export function normaliseComponentText(raw: string | null | undefined): string {
     if (!raw) return '';
     return raw
         .replace(/@\w{3}@/g, '')
+        .replace(/\\n/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }

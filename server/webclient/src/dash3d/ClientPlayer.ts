@@ -197,7 +197,9 @@ export default class ClientPlayer extends ClientEntity {
         ]
     ];
 
-    name: string | null = null;
+    private rawName: string | null = null;
+    get name(): string | null { return this.rawName === null ? null : JString.toScreenName(this.rawName); }
+    set name(value: string | null) { this.rawName = value === null ? null : JString.toRawUsername(JString.toUserhash(value)); }
     ready: boolean = false;
     gender: number = 0;
     headicons: number = 0;

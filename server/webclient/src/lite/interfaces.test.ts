@@ -64,6 +64,26 @@ function invPacket(componentId: number, items: Array<[number, number]>): Packet 
 }
 
 describe('per-client interface tables', () => {
+    test('bank contents distinguish a real empty inventory from stopped transmission', () => {
+        if (!available) {
+            console.warn(`[skip] ${ORIGIN} unreachable`);
+            return;
+        }
+        const client = makeClient('banktest');
+        expect(client.bankContentsKnown).toBe(false);
+        const contents = invPacket(5382, [[996, 25]]);
+        dispatch(client, ServerProt.UPDATE_INV_FULL, contents, 7);
+        expect(client.bankContentsKnown).toBe(true);
+        const stop = Packet.alloc(1); stop.p2(5382); stop.pos = 0;
+        dispatch(client, ServerProt.UPDATE_INV_STOP_TRANSMIT, stop, 2);
+        expect(client.bankContentsKnown).toBe(false);
+        const empty = invPacket(5382, []);
+        dispatch(client, ServerProt.UPDATE_INV_FULL, empty, 4);
+        expect(client.bankContentsKnown).toBe(true);
+        const other = Packet.alloc(1); other.p2(INV_COMPONENT); other.pos = 0;
+        dispatch(client, ServerProt.UPDATE_INV_STOP_TRANSMIT, other, 2);
+        expect(client.bankContentsKnown).toBe(true);
+    });
     test('two clients keep separate inventories', () => {
         if (!available) {
             console.warn(`[skip] ${ORIGIN} unreachable`);

@@ -51,7 +51,7 @@
 
 | Signature | Description |
 |---|---|
-| `async chopTree(target?: NearbyLoc \| string \| RegExp): Promise<ChopTreeResult>` | Chop a tree and wait for logs to appear in inventory. |
+| `async chopTree(target?: NearbyLoc \| string \| RegExp): Promise<ChopTreeResult>` | Chop a tree and wait for logs to appear in inventory. Fresh level refusals return level_too_low with requiredLevel immediately. |
 | `async burnLogs(logsTarget?: InventoryItem \| string \| RegExp): Promise<BurnLogsResult>` | Burn logs using a tinderbox, wait for firemaking XP. |
 
 ### Items & Inventory
@@ -73,7 +73,7 @@
 
 | Signature | Description |
 |---|---|
-| `async walkTo(x: number, z: number, tolerance: number = 3, options: { timeout?: number } = {}): Promise<ActionResult>` | Walk to coordinates using pathfinding, auto-opening doors. Bounds the whole route with options.timeout (default 120s), refuses stale state, and aborts on cancellation or death. |
+| `async walkTo(x: number, z: number, tolerance: number = 3, options: { timeout?: number } = {}): Promise<ActionResult>` | Walk to coordinates using pathfinding, auto-opening doors. options.timeout is MILLISECONDS, default 120000 (two minutes); 180 means 180 milliseconds, not three minutes. Omit it for the default. Refuses stale state and aborts on cancellation or death. |
 
 ### Shopping
 
@@ -82,7 +82,8 @@
 | `async closeShop(timeout: number = 5000): Promise<ActionResult>` | Close the shop interface. |
 | `async openShop(target?: NearbyNpc \| string \| RegExp): Promise<ActionResult>` | Open a shop by trading with an NPC. Defaults to the nearest shopkeeper. |
 | `async buyFromShop(target: ShopItem \| string \| RegExp, amount: number = 1): Promise<ShopResult>` | Buy an item from an open shop. `success` is true only when the full requested amount arrived; a short fill (out of stock, out of coins, full inventory) returns `success: false` with `partial: true` and the actual `amountBought`. |
-| `async sellToShop(target: InventoryItem \| ShopItem \| string \| RegExp, amount: SellAmount = 1): Promise<ShopSellResult>` | Sell an item to an open shop. `success` is true only when the full requested amount was sold; a short fill returns `success: false` with `partial: true` and `amountSold`. |
+| `async sellToShop(target: InventoryItem \| ShopItem \| string \| RegExp, amount: SellAmount = 1): Promise<ShopSellResult>` | Sell an item to an open shop. `success` is true only when the full requested amount was sold; a short fill returns `success: false` with `partial: true` and `amountSold`. Check coinsReceived for income: an overstocked shop can legally pay 0 GP. Use getShopSellPrice before selling to check the current server offer. |
+| `async getShopSellPrice(target: InventoryItem \| ShopItem \| string \| RegExp): Promise<ShopPriceResult>` | Read the server's current per-item selling offer via Value, without selling. ShopItem.sellPrice is only a stock-independent estimate. |
 
 ### Banking
 
@@ -91,7 +92,7 @@
 | `async openBank(timeout: number = 10000): Promise<OpenBankResult>` | Open a bank booth or talk to a banker. |
 | `async closeBank(timeout: number = 5000): Promise<ActionResult>` | Close the bank interface. |
 | `async depositItem(target: InventoryItem \| string \| RegExp, amount: number = -1): Promise<BankDepositResult>` | Deposit an item into the bank. Use -1 for all. A pattern with `-1` deposits every distinct matching item: an alternation like `/^(shark\|burnt shark)$/i` covers both ids, not just whichever matched first. |
-| `async withdrawItem(target: BankItem \| string \| RegExp \| number, amount: number = 1, options: { asNote?: boolean } = {}): Promise<BankWithdrawResult>` | Withdraw an item from the bank by slot, name, or BankItem. `asNote: true` withdraws as a banknote: the note/item toggle is synced first (and synced back to items on the next plain withdrawal), and completion is detected on the noted item's arrival. Items the engine cannot note are withdrawn unnoted with a game message; the result then carries the unnoted item. |
+| `async withdrawItem(target: BankItem \| { id: number } \| string \| RegExp \| number, amount: number = 1, options: { asNote?: boolean } = {}): Promise<BankWithdrawResult>` | Withdraw an item from the bank by slot, name, or BankItem. `asNote: true` withdraws as a banknote: the note/item toggle is synced first (and synced back to items on the next plain withdrawal), and completion is detected on the noted item's arrival. Items the engine cannot note are withdrawn unnoted with a game message; the result then carries the unnoted item. Pass {id: itemId} for an explicit ID, a fresh BankItem or an exact name. Bare numeric targets are bank SLOT indices. |
 
 ### Player Trading
 
@@ -141,7 +142,7 @@
 
 | Signature | Description |
 |---|---|
-| `async mineRock(target: NearbyLoc \| string \| RegExp = /rocks?/i, options: { timeout?: number } = {}): Promise<MineRockResult>` | Mine a rock and wait for new ore plus Mining XP. Rock names have a "Rocks" prefix: use /copper ore/i for rocks and /^copper ore$/i for inventory. |
+| `async mineRock(target: NearbyLoc \| string \| RegExp = /rocks?/i, options: { timeout?: number } = {}): Promise<MineRockResult>` | Mine a rock and wait for new ore plus Mining XP. Fresh dialogue/message refusals return immediately; level_too_low includes requiredLevel. Rock names have a "Rocks" prefix: use /copper ore/i for rocks and /^copper ore$/i for inventory. |
 
 ### Prayer
 
@@ -419,6 +420,8 @@ interface ShopState {
 ```typescript
 interface BankState {
   isOpen: boolean;
+  /** False before a full contents packet or after inventory transmission stops during closing. */
+  contentsKnown?: boolean;
   items: BankItem[];
   /** Whether withdrawals arrive as banknotes - the bank_main note/item toggle, mirrored from varp 115 (%bankcert). Meaningless while the bank is closed. */
   noteMode: boolean;
@@ -599,6 +602,8 @@ interface ChopTreeResult {
   success: boolean;
   logs?: InventoryItem;
   message: string;
+  reason?: 'level_too_low' | 'rejected';
+  requiredLevel?: number;
 }
 ```
 
@@ -613,7 +618,8 @@ interface MineRockResult {
   ore?: InventoryItem;
   oresMined: number;
   xpGained: number;
-  reason?: 'loc_not_found' | 'no_matching_option' | 'cant_reach' | 'inventory_full' | 'rejected' | 'timeout';
+  requiredLevel?: number;
+  reason?: 'loc_not_found' | 'no_matching_option' | 'cant_reach' | 'inventory_full' | 'level_too_low' | 'depleted' | 'rejected' | 'timeout';
 }
 ```
 
@@ -681,6 +687,8 @@ interface ShopResult {
 
 ```typescript
 interface ShopSellResult {
+  /** Observed coin increase from this sale, including zero for a valid zero-value sale. */
+  coinsReceived?: number;
   /** True only when the full requested amount was sold. */
   success: boolean;
   message: string;
@@ -690,6 +698,15 @@ interface ShopSellResult {
   partial?: boolean;
   rejected?: boolean;
   reason?: 'invalid_amount' | 'shop_not_open' | 'item_not_found' | 'rejected' | 'partial_fill' | 'timeout';
+}
+```
+
+### ShopPriceResult
+
+```typescript
+interface ShopPriceResult {
+  /** Current server offer for one item. Stock changes can change subsequent offers. */
+  price?: number;
 }
 ```
 
@@ -793,7 +810,7 @@ interface SmithResult {
   xpGained?: number;
   itemsSmithed?: number;
   product?: InventoryItem;
-  reason?: 'no_hammer' | 'no_bars' | 'no_anvil' | 'cant_reach' | 'interface_not_opened' | 'level_too_low' | 'timeout' | 'no_xp_gained';
+  reason?: 'no_hammer' | 'no_bars' | 'no_anvil' | 'cant_reach' | 'interface_not_opened' | 'level_too_low' | 'unknown_product' | 'timeout' | 'no_xp_gained';
 }
 ```
 

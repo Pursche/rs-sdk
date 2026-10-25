@@ -73,6 +73,23 @@ export class ActionHelpers {
         return null;
     }
 
+    /** Snapshot message/dialogue cursors before dispatch; ignore stale refusal history. */
+    freshRefusal(phrases: readonly string[]): () => string | null {
+        const messageCursor = this.getMessageTick();
+        const initial = this.sdk.getState();
+        const dialogCursor = Math.max(0, ...(initial?.recentDialogs ?? []).map(entry => entry.observationId ?? entry.tick));
+        const page = initial?.dialog.pageId;
+        const text = initial?.dialog.text;
+        return () => {
+            const message = this.findRefusal(messageCursor, phrases);
+            if (message) return message;
+            const state = this.sdk.getState();
+            const texts = (state?.recentDialogs ?? []).filter(entry => (entry.observationId ?? entry.tick) > dialogCursor).map(entry => entry.text.join(' '));
+            if (state?.dialog.isOpen && (state.dialog.pageId !== page || state.dialog.text !== text)) texts.push(state.dialog.text ?? '');
+            return texts.find(value => phrases.some(phrase => value.toLowerCase().includes(phrase))) ?? null;
+        };
+    }
+
     /** The first PvP refusal since a getMessageTick() cursor, or null. */
     findPvpRefusal(sinceMessageTick: number): string | null {
         return this.findRefusal(sinceMessageTick, PVP_REFUSALS);

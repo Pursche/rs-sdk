@@ -290,8 +290,11 @@ export interface ShopItem {
     name: string;
     count: number;
     baseCost: number;
+    /** Stock-independent estimate, not a server quote. */
     buyPrice: number;
+    /** Stock-independent estimate; use actions.getShopSellPrice for the actual offer, which may be zero. */
     sellPrice: number;
+    pricesEstimated?: boolean;
 }
 
 export interface ShopConfig {
@@ -317,6 +320,8 @@ export interface BankItem {
 
 export interface BankState {
     isOpen: boolean;
+    /** False before a full contents packet or after inventory transmission stops during closing. */
+    contentsKnown?: boolean;
     items: BankItem[];
     /**
      * Whether withdrawals arrive as banknotes - the bank_main note/item
@@ -760,6 +765,8 @@ export interface ChopTreeResult {
     success: boolean;
     logs?: InventoryItem;
     message: string;
+    reason?: 'level_too_low' | 'rejected';
+    requiredLevel?: number;
 }
 
 /** One ore observed entering the inventory, with Mining XP as corroboration. */
@@ -769,7 +776,8 @@ export interface MineRockResult {
     ore?: InventoryItem;
     oresMined: number;
     xpGained: number;
-    reason?: 'loc_not_found' | 'no_matching_option' | 'cant_reach' | 'inventory_full' | 'rejected' | 'timeout';
+    requiredLevel?: number;
+    reason?: 'loc_not_found' | 'no_matching_option' | 'cant_reach' | 'inventory_full' | 'level_too_low' | 'depleted' | 'rejected' | 'timeout';
 }
 
 export interface BurnLogsResult {
@@ -813,6 +821,8 @@ export interface ShopResult {
 }
 
 export interface ShopSellResult {
+    /** Observed coin increase from this sale, including zero for a valid zero-value sale. */
+    coinsReceived?: number;
     /** True only when the full requested amount was sold. */
     success: boolean;
     message: string;
@@ -822,6 +832,11 @@ export interface ShopSellResult {
     partial?: boolean;
     rejected?: boolean;
     reason?: 'invalid_amount' | 'shop_not_open' | 'item_not_found' | 'rejected' | 'partial_fill' | 'timeout';
+}
+
+export interface ShopPriceResult extends ActionResult {
+    /** Current server offer for one item. Stock changes can change subsequent offers. */
+    price?: number;
 }
 
 /** Any positive integer up to MAX_SHOP_ACTION_QUANTITY, or 'all'. */
@@ -892,7 +907,7 @@ export interface SmithResult {
     xpGained?: number;
     itemsSmithed?: number;
     product?: InventoryItem;
-    reason?: 'no_hammer' | 'no_bars' | 'no_anvil' | 'cant_reach' | 'interface_not_opened' | 'level_too_low' | 'timeout' | 'no_xp_gained';
+    reason?: 'no_hammer' | 'no_bars' | 'no_anvil' | 'cant_reach' | 'interface_not_opened' | 'level_too_low' | 'unknown_product' | 'timeout' | 'no_xp_gained';
 }
 
 export interface OpenBankResult {

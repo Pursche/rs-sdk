@@ -1271,7 +1271,15 @@ export class BotSDK {
             return { success: false, message: 'No dialog open', reason: 'no_dialog' };
         }
         const regex = typeof pattern === 'string' ? new RegExp(pattern, 'i') : pattern;
-        const match = dialog.options.find(o => regex.test(o.text));
+        const matches = dialog.options.filter(o => { regex.lastIndex = 0; return regex.test(o.text.replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim()); });
+        if (matches.length > 1) {
+            return {
+                success: false,
+                message: `Ambiguous dialog selector ${pattern}. Matched: ${matches.map(o => `"${o.text}"`).join(', ')}. Choose exact visible text (for example /^Bronze$/ for one bar); Smelt X requires sendCountDialog(quantity).`,
+                reason: 'ambiguous_match'
+            };
+        }
+        const match = matches[0];
         if (!match) {
             const available = dialog.options.map(o => `"${o.text}"`).join(', ') || '(none)';
             return {
@@ -1673,7 +1681,11 @@ export class BotSDK {
 
     /** Wait for specified number of game ticks. */
     async sendWait(ticks: number = 1): Promise<ActionResult> {
-        return this.sendAction({ type: 'wait', ticks, reason: 'SDK' });
+        if (!Number.isSafeInteger(ticks) || ticks < 1) throw new Error('sendWait ticks must be a positive integer');
+        // The client's raw wait action counts 20ms frames. Observe published
+        // server ticks instead, without issuing a packet that could interrupt work.
+        await this.waitForTicks(ticks);
+        return { success: true, message: `Waited ${ticks} server ticks` };
     }
 
     /** Deposit item to bank by slot. */

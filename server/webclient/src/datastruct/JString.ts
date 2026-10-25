@@ -1,3 +1,5 @@
+import { displayNameOf } from './DisplayNames.js';
+
 export default class JString {
     // prettier-ignore
     private static USERHASH_CHAR: string[] = [
@@ -83,6 +85,8 @@ export default class JString {
     }
 
     static toScreenName(str: string): string {
+        const displayName = displayNameOf(str);
+        if (displayName !== undefined) return displayName;
         if (str.length === 0) {
             return str;
         }

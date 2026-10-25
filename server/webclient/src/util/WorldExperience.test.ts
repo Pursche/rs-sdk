@@ -17,14 +17,14 @@ test('standard RuneScape level thresholds', () => {
 test('server thresholds update existing table references', async () => {
     const reference = worldExperience;
     const custom = standard.map(xp => xp + 1);
-    globalThis.fetch = (async () => Response.json({ experience: custom })) as typeof fetch;
+    globalThis.fetch = Object.assign(async () => Response.json({ experience: custom }), { preconnect: originalFetch.preconnect });
     await loadWorldExperience('http://localhost');
     expect(worldExperience).toBe(reference);
     expect(reference[97]).toBe(13034432);
 });
 
 test('invalid server thresholds fail without changing the current table', async () => {
-    globalThis.fetch = (async () => Response.json({ experience: [100, 0] })) as typeof fetch;
+    globalThis.fetch = Object.assign(async () => Response.json({ experience: [100, 0] }), { preconnect: originalFetch.preconnect });
     await expect(loadWorldExperience('http://localhost')).rejects.toThrow('Invalid world XP thresholds');
     expect(worldExperience).toEqual(standard);
 });

@@ -169,6 +169,8 @@ export class LiteClient {
     zoneUpdateZ = 0;
     /** Packets consumed since login. The session watchdog samples this for silence. */
     packetsReceived = 0;
+    /** Inventory transmission can stop one tick before the bank modal closes. */
+    bankContentsKnown = false;
     /** Packets whose handler threw and was contained. Reported by the swarm/runner. */
     dispatchErrors = 0;
     private dispatchErrorBurst = 0;

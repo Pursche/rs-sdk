@@ -13,6 +13,7 @@
 // quiet without closing. A single bad packet is not an ending; see handlePacket.
 
 import './dom-shim.js';
+import { refreshDisplayNames } from '#/datastruct/DisplayNames.js';
 import { loginJitterMs } from './LoginBackoff.js';
 
 import { invalidateCache, loadCache } from './cache.js';
@@ -106,6 +107,7 @@ export async function startSession(opts: SessionOptions): Promise<LiteSession> {
     }
     const secured = opts.secured ?? !(opts.host.startsWith('localhost') || opts.host.startsWith('127.'));
     const origin = `${secured ? 'https' : 'http'}://${opts.host}`;
+    await refreshDisplayNames(origin);
     const cacheDir = opts.cacheDir ?? `${process.env.HOME}/.cache/rs-sdk-lite`;
 
     // Fail with the fix, not a decode error or an opaque login response 6, when the server
@@ -162,6 +164,7 @@ export async function startSession(opts: SessionOptions): Promise<LiteSession> {
     });
 
     let running = true;
+    let nextNameRefresh = Date.now() + 30_000;
     let cycles = 0;
     let idle = 0;
     let seenPackets = 0;
@@ -174,6 +177,10 @@ export async function startSession(opts: SessionOptions): Promise<LiteSession> {
         let end: SessionEnd = { reason: 'stopped' };
 
         while (running) {
+            if (Date.now() >= nextNameRefresh) {
+                nextNameRefresh = Date.now() + 30_000;
+                void refreshDisplayNames(origin);
+            }
             if (client.isLoggedOut()) {
                 end = { reason: 'logged-out' };
                 break;

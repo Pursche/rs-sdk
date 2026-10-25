@@ -131,6 +131,10 @@ export interface NearbyPlayer {
     distance: number;
     /** See NearbyNpc.reachable. */
     reachable?: boolean;
+    /** Current client-observed combat target, corroborated by the combat cycle. */
+    combatTargetType?: 'npc' | 'player' | 'none';
+    combatTargetIndex?: number;
+    inCombat?: boolean;
 }
 
 export interface GroundItem {
@@ -212,8 +216,9 @@ export interface ShopItem {
     name: string;
     count: number;
     baseCost: number;   // ObjType.cost - base item value
-    buyPrice: number;   // Calculated buy price (what player pays to shop)
-    sellPrice: number;  // Calculated sell price (what shop pays player)
+    buyPrice: number;   // Stock-independent estimate, not a server quote
+    sellPrice: number;  // Stock-independent estimate; server offer may be zero
+    pricesEstimated?: boolean;
 }
 
 export interface ShopConfig {
@@ -268,6 +273,8 @@ export interface TradeState {
 
 export interface BankState {
     isOpen: boolean;
+    /** False before a full contents packet or after inventory transmission stops during closing. */
+    contentsKnown?: boolean;
     items: BankItem[];
     /**
      * Whether withdrawals arrive as banknotes - the bank_main note/item

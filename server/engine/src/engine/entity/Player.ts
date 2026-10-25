@@ -1,4 +1,5 @@
 import { activeWorldSettings, worldExperience } from '#/util/WorldSettings.js';
+import { displayNames } from '#/util/DisplayNames.js';
 import { playerSaveStore } from '#/engine/market/MarketStore.js';
 import { PlayerInfoProt, Visibility } from '#/network/rsbuf/index.js';
 import { CollisionFlag, CollisionType } from '#/engine/routefinder/index.js';
@@ -68,7 +69,6 @@ import ServerGameMessage from '#/network/game/server/ServerGameMessage.js';
 import { LoggerEventType } from '#/server/logger/LoggerEventType.js';
 import { ChatModePrivate, ChatModePublic, ChatModeTradeDuel } from '#/engine/entity/ChatModes.js';
 import Environment from '#/util/Environment.js';
-import { toDisplayName } from '#/util/JString.js';
 import LinkList from '#/datastruct/LinkList.js';
 import VarBitType from '#/cache/config/VarBitType.js';
 import FriendlistLoaded from '#/network/game/server/model/FriendlistLoaded.js';
@@ -309,7 +309,7 @@ export default class Player extends PathingEntity {
     username: string;
     username37: bigint;
     hash64: bigint;
-    displayName: string;
+    get displayName(): string { return displayNames.get(this.username); }
     body: number[] = [
         0, // hair
         10, // beard
@@ -474,7 +474,6 @@ export default class Player extends PathingEntity {
         this.username = username;
         this.username37 = username37;
         this.hash64 = hash64;
-        this.displayName = toDisplayName(username);
         this.vars = new Int32Array(VarPlayerType.count);
         this.varsString = new Array(VarPlayerType.count);
         this.lastStats.fill(-1);
@@ -1811,6 +1810,9 @@ export default class Player extends PathingEntity {
             return 0;
         }
 
+        // Shop scripts read this coefficient for quotes and each transaction unit.
+        // Preserve the stored shop-specific value so toggling back works in open shops.
+        if (varp.debugname === 'shop_haggle' && !activeWorldSettings.stockDependentShopPricing) return 0;
         return varp.type === ScriptVarType.STRING ? this.varsString[varp.id] : this.vars[varp.id];
     }
 
