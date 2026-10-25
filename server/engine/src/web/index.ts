@@ -16,6 +16,9 @@ import { WebSocketData, handleWebSocketUpgrade, handleGatewayEndpointGet, websoc
 import { getIp } from './utils.js';
 import { getPlayerPositionsJson } from './worldfeed.js';
 import { deleteLocalCharacter } from '#/util/DeleteCharacter.js';
+import { getMemoryDiagnostics } from '#/util/MemoryDiagnostics.js';
+import { startWebTransport } from './WebTransport.js';
+import { isTransportRequest, setTransportSecret } from './transportAuth.js';
 
 export type { WebSocketData };
 
@@ -69,10 +72,14 @@ export function getWebStats() {
 }
 
 export async function startWeb() {
-    Bun.serve<WebSocketData, WebSocketRoutes>({
-        port: Environment.WEB_PORT,
-        hostname: process.env.BIND_HOST || '0.0.0.0',
+    const offThread = process.env.WEB_TRANSPORT_WORKER !== 'false';
+    const secret = offThread ? crypto.randomUUID() : '';
+    setTransportSecret(secret);
+    const engine = Bun.serve<WebSocketData, WebSocketRoutes>({
+        port: offThread ? 0 : Environment.WEB_PORT,
+        hostname: offThread ? '127.0.0.1' : process.env.BIND_HOST || '0.0.0.0',
         async fetch(req, server) {
+            if (offThread && !isTransportRequest(req)) return new Response('Forbidden', { status: 403 });
             const url = new URL(req.url ?? '', `http://${req.headers.get('host')}`);
             const start = Date.now();
             try {
@@ -81,7 +88,18 @@ export async function startWeb() {
                 recordRequest(url, req, Date.now() - start);
             }
         },
-        websocket: websocketHandlers
+        // Loopback never compresses. The public worker owns compression and socket
+        // I/O; spectator extraction remains on the tick thread before mask cleanup.
+        websocket: { ...websocketHandlers, perMessageDeflate: offThread ? false : true }
+    });
+    if (offThread) await startWebTransport({
+        port: Environment.WEB_PORT,
+        hostname: process.env.BIND_HOST || '0.0.0.0',
+        engineOrigin: `http://127.0.0.1:${engine.port}`,
+        gatewayOrigin: `ws://127.0.0.1:${process.env.AGENT_PORT || '7780'}`,
+        secret,
+        behindFly: Boolean(process.env.FLY_APP_NAME),
+        worldFeed: { enabled: Environment.WORLD_FEED, token: Environment.WORLD_FEED_TOKEN, maxClients: Environment.WORLD_FEED_MAX_CLIENTS }
     });
 }
 
@@ -406,6 +424,11 @@ export async function startManagementWeb() {
             }),
             // rolling per-phase cycle timings over the last ~300 ticks
             '/tickstats': () => Response.json({ ...World.getTickStats(), web: getWebStats() }),
+            '/memory': (req: Request) => Response.json(getMemoryDiagnostics(new URL(req.url).searchParams.has('history'))),
+            '/memory/heap': async () => {
+                const { heapStats } = await import('bun:jsc');
+                return Response.json({ ...getMemoryDiagnostics(), heap: heapStats() });
+            },
             // rs-sdk: the gateway asks whether a bot's recent login was refused for an old client
             // revision, so it can tell that bot's SDK scripts to update (management port only)
             '/outdated-client': (req: Request) => {

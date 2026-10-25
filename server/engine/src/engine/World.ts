@@ -690,7 +690,7 @@ class World {
 
         for (const player of this.playerLoop.all()) {
             try {
-                player.playtime++;
+                player.advancePlaytime(this.tickRate > 0 ? this.tickRate : World.TICKRATE);
 
                 if (this.currentTick % World.AFK_EVENTRATE === 0) {
                     player.afkEventReady = Math.random() < (player.zonesAfk() ? World.AFK_CHANCE2 : World.AFK_CHANCE1);
@@ -810,6 +810,12 @@ class World {
 
                 if ((player.masks & PlayerInfoProt.EXACT_MOVE) == 0) {
                     player.validateDistanceWalked();
+                }
+
+                if (!player.delayed) {
+                    player.safeX = player.x;
+                    player.safeZ = player.z;
+                    player.safeLevel = player.level;
                 }
             } catch (err) {
                 console.error(err);

@@ -1,0 +1,2 @@
+# Generated API checks compare against LF output on every platform.
+sdk/API.md text eol=lf

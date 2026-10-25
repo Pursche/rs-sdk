@@ -66,6 +66,12 @@ survival) is described in the project memory; this file is the human-readable ch
       Verify: `curl localhost:8888/api/version` and `curl 'localhost:8898/outdated-client?username=x'`.
 
 ### Database
+- [ ] **Checkpoint hot path** — `Player.save()` writes permanent nonzero varps in
+      one pass and backfills their count without changing save bytes. `MarketStore.checkpoint()`
+      compares save blobs inside SQLite to skip identical updates; keep the comparison
+      transactional (no JS cache) and retain whole-world recovery boundaries and FULL sync.
+      Verify: `bun test test/market.test.ts test/reconnect.test.ts`; benchmark:
+      `bun tools/bench/checkpoints.ts`; recovery: `bun test/market-recovery.ts`.
 - [ ] **Bun sqlite dialect** — `src/db/dialect/BunSqliteDialect*.ts` (3 files) + runtime chooser
       in `src/db/query.ts` (`typeof Bun !== 'undefined'` → bun:sqlite, else upstream's
       `node:sqlite`). Upstream is node-primary; **Bun does not implement `node:sqlite`** —
@@ -207,10 +213,12 @@ sit in a **reserved range above any upstream revision** (never renumber) or at t
 (renumber on every revision bump). The packers write gaps as empty entries.
 
 Reserved (fixed since 289; upstream `377-wip` tops out at interface 18785 / varp 724):
-- [ ] **Interfaces 40000+** — GE `grand_exchange` root **40000** … `grand_exchange_side:inv` **40495**
-      (`interface.pack` + same ids appended to `interface.order`). Free: the interface format lists
+- [ ] **Interfaces 40000+** — GE `grand_exchange` root **40000** … `grand_exchange_side:inv` **40495**,
+      plus offer slots 6–11 (`grand_exchange:slot6` … `slot11_sell`) at **40496–40753**, listed in
+      `interface.order` before `grand_exchange_side` so each root stays contiguous
+      (`interface.pack` + same ids in `interface.order`). Free: the interface format lists
       component ids explicitly, so the gap costs no bytes. Ids must stay below 65535 (the format's
-      root marker). Add new custom interfaces after 40495.
+      root marker). Add new custom interfaces after 40753.
 - [ ] **Varps 1000+** — `pvp_death_mark` **1000**. Saves store varps by id, so a fixed id means no
       more save migrations. Cost: per-player `vars`/`varsString` arrays are sized to the max id.
       `PlayerLoading.load` still moves a value found at **358** (its 274 id) to `pvp_death_mark`;
@@ -393,6 +401,22 @@ Upgrade hazards:
 - Player.ts derives fine-XP thresholds from that module. /world-settings publishes real-XP thresholds; browser and lite clients load them through util/WorldExperience.ts at startup.
 - The token-protected management endpoint applies ticks live or saves progression settings and requests an empty-world shutdown. The panel launches the engine again and reconnects its clients.
 - These settings replace the fixed XP-table formulas described in the upstream patch checklist above. After a sync, preserve the shared table imports and startup downloads; run WorldExperience.test.ts.
+- Shop pricing and unlimited general-store sales are independent persisted settings.
+  Preserve the live management actions and the general-store-only inventory-space
+  override; player capacity, ownership and specialist shop restrictions still apply.
+  Verify with `test/shop-pricing.test.ts` and `test/shop-capacity.test.ts`.
+- `/delete-character` performs guarded local-only account/save deletion after
+  logout. Preserve the management token/origin checks and pending-login guards;
+  verify the isolated fixtures in `test/delete-character.test.ts`.
+- Preserve case-aware display metadata separately from canonical account identity
+  in both clients, and retain observed bank contents after interfaces close.
+  Verify `src/util/DisplayNames.test.ts` and the webclient display/state tests.
+- The public transport worker and direct web-listener fallback both honor
+  `BIND_HOST`; the internal transport hop remains loopback-only and authenticated.
+  Preserve this when merging web-server changes; run `test/web-transport.test.ts`.
+- SDK companions include observed shop sell quotes/sale evidence, exact-ID bank
+  withdrawals, corrected tree/mining/smithing helpers and real server-tick waits.
+  Run the corresponding SDK tests and regenerate `sdk/API.md` after signature edits.
 
 ## Cross-boundary invariants (how things actually break)
 
