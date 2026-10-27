@@ -31,6 +31,14 @@ survival) is described in the project memory; this file is the human-readable ch
       client opcode 243 are still unused in upstream's `ServerGameProt`/`ClientGameProt`
       (and webclient `ServerProt`/`ClientProt`), and that `ServerProtSizes[255] === -1`.
 
+### Login worker bootstrap
+- [ ] **`src/login.ts` World-first initialization** — initialize World before
+      LoginServer save serializers, matching the game entrypoint. Player-first
+      traversal can evaluate Obj before NonPathingEntity and kill the login worker
+      while HTTP remains available. Verify with
+      `bun test server/engine/test/login-bootstrap.test.ts` from the SDK root; the
+      isolated SQLite worker must open its login listener without creating accounts.
+
 ### Config / environment
 - [ ] **`Environment.ts`** — flat back-compat aliases over 274's nested `WorldConfig`, plus
       `migrateFromLegacyEnv(loadWorldConfig(), process.env)` overlay so fly.io `[env]` vars win
