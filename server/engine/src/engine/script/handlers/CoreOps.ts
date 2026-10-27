@@ -1,3 +1,4 @@
+import {updatePoisonOrigin} from '#/engine/entity/tracking/EncounterJournal.js';
 import ScriptVarType from '#/cache/config/ScriptVarType.js';
 import VarNpcType from '#/cache/config/VarNpcType.js';
 import VarPlayerType from '#/cache/config/VarPlayerType.js';
@@ -54,7 +55,9 @@ const CoreOps: CommandHandlers = {
         if (varpType.type === ScriptVarType.STRING) {
             player.setVar(varpType.id, state.popString());
         } else {
-            player.setVar(varpType.id, state.popInt());
+            const value=state.popInt();
+            if(varpType.debugname==='poison')updatePoisonOrigin(player,Number(player.getVar(varpType.id)),value,state);
+            player.setVar(varpType.id,value);
         }
     },
 
@@ -117,7 +120,9 @@ const CoreOps: CommandHandlers = {
         if (varnType.type === ScriptVarType.STRING) {
             npc.setVar(varnType.id, state.popString());
         } else {
-            npc.setVar(varnType.id, state.popInt());
+            const value=state.popInt();
+            if(varnType.debugname==='npc_poison')updatePoisonOrigin(npc,Number(npc.getVar(varnType.id)),value,state);
+            npc.setVar(varnType.id,value);
         }
     },
 

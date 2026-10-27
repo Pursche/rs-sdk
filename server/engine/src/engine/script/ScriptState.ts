@@ -1,3 +1,4 @@
+import type {EncounterCause} from '#/engine/entity/tracking/EncounterJournal.js';
 import DbTableType from '#/cache/config/DbTableType.js';
 import Entity from '#/engine/entity/Entity.js';
 import Loc from '#/engine/entity/Loc.js';
@@ -66,6 +67,7 @@ export default class ScriptState {
      * The primary entity.
      */
     self: Entity | null = null;
+    encounterCause?:EncounterCause;
 
     // active entities
     /**

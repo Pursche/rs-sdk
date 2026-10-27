@@ -1,0 +1,33 @@
+import './dom-shim.js';
+import {expect,test} from 'bun:test';
+import Packet from '#/io/Packet.js';
+import {ServerProt} from '#/io/ServerProt.js';
+import {ClientProt} from '#/io/ClientProt.js';
+import {LiteClient} from './LiteClient.js';
+import {dispatch} from './protocol/incoming.js';
+import {EncounterBuffer} from '../bot/encounter-events.js';
+const client=()=>{const c=Object.create(LiteClient.prototype) as LiteClient;Object.assign(c,{conn:{in:Packet.alloc(1),out:Packet.alloc(1),isClosed:false},serverEncounters:new EncounterBuffer(),interfaces:{activate:()=>{}},activate:()=>{}});return c;};
+const body=(text:string)=>{const p=Packet.alloc(1);p.pjstr(text);p.pos=0;return p;};
+test('lite packet dispatch negotiates once, keeps reports private per client and preserves absolute positions',()=>{
+ const a=client(),b=client();
+ dispatch(a,ServerProt.MESSAGE_GAME,body('Encounter reports available (v1).'),0);
+ dispatch(a,ServerProt.MESSAGE_GAME,body('Encounter reports available (v1).'),0);
+ expect(a.out.pos).toBe(1);expect(a.out.data[0]).toBe(ClientProt.ENCOUNTER_SUBSCRIBE);expect(b.out.pos).toBe(0);
+ const target={kind:'player',entityId:'owner',id:null,index:1,name:'encountertest',hp:0,maxHp:10,position:{x:3200,z:3201,plane:1}};
+ const source={...target,kind:'npc',entityId:'npc',id:107,name:'Scorpion',hp:7,maxHp:17,position:{x:3199,z:3201,plane:1}};
+ const text=JSON.stringify({version:1,stream:'stream',ownerId:'owner',events:[{version:1,id:'stream:1',tick:1,at:1000,kind:'death',cause:'npc_attack',script:'test',amount:0,beforeHp:1,afterHp:0,source,target}]});
+ dispatch(a,ServerProt.ENCOUNTER_EVENTS,body(text),text.length+1);
+ expect(a.serverEncounters.snapshot().events[0]).toMatchObject({source:{position:{x:3199,z:3201,plane:1}},target:{position:{x:3200,z:3201,plane:1}}});
+ expect(b.serverEncounters.snapshot().version).toBeNull();
+});
+test('browser tcpIn decodes the actual length-framed encounter opcode using the same private buffer',async()=>{
+ const {Client}=await import('../client/Client.js');
+ const c:any=Object.create(Client.prototype);
+ const text=JSON.stringify({version:1,stream:'browser',ownerId:'owner',events:[]});
+ const payload=body(text),bytes=Array.from(payload.data.slice(0,text.length+1));
+ c.serverEncounters=new EncounterBuffer();c.in=Packet.alloc(1);c.ptype=-1;c.psize=0;c.timeoutTimer=0;c.packetType1=-1;c.packetType2=-1;c.packetType3=-1;
+ let input=[ServerProt.ENCOUNTER_EVENTS,(bytes.length>>8)&255,bytes.length&255,...bytes];
+ c.stream={get available(){return input.length;},read:async()=>input.shift()??-1,readBytes:async(dst:Uint8Array,offset:number,length:number)=>{for(let i=0;i<length;i++)dst[offset+i]=input.shift()!;}};
+ c.randomIn=null;
+ expect(await c.tcpIn()).toBe(true);expect(input).toHaveLength(0);expect(c.serverEncounters.snapshot()).toMatchObject({version:1,stream:'browser',ownerId:'owner'});
+});

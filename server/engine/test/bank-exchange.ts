@@ -1,0 +1,111 @@
+import {strict as assert} from 'node:assert';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+const verify=process.argv[2]==='verify';
+const dir=verify?'':mkdtempSync(join(tmpdir(),'bank-exchange-'));
+if(!verify)process.env.GE_DATABASE=join(dir,'market.sqlite');
+process.env.GE_ENABLED='true';
+const {default:World}=await import('../src/engine/World.js');
+const {default:ObjType}=await import('../src/cache/config/ObjType.js');
+const {default:InvType}=await import('../src/cache/config/InvType.js');
+const {PlayerLoading}=await import('../src/engine/entity/PlayerLoading.js');
+const {default:Packet}=await import('../src/io/Packet.js');
+const {marketStore}=await import('../src/engine/market/MarketStore.js');
+const {BankExchange}=await import('../src/engine/market/BankExchange.js');
+World.reload();
+const coins=ObjType.getId('coins'),logs=ObjType.getId('logs'),bankId=InvType.getId('bank');
+const load=(name:string)=>PlayerLoading.load(name,new Packet(new Uint8Array()),null);
+const bank=(name:string)=>load(name).getInventory(bankId)!;
+const count=(name:string,item:number)=>bank(name).getItemCount(item);
+const ge=new BankExchange();
+if(verify){
+  assert.equal(ge.mode(),'exchange');
+  const expected=JSON.parse(process.argv[3]);
+  for(const [name,items] of Object.entries(expected))for(const [item,n] of Object.entries(items as any))assert.equal(count(name,Number(item)),n,`restart ${name}/${item}`);
+  ge.sync();
+  console.log('Bank exchange process restart checks passed');
+  process.exit(0);
+}
+try {
+  const seed=(name:string,items:[number,number][])=>{const p=load(name);for(const [id,n] of items)p.invAdd(bankId,id,n);marketStore().checkpoint(name,p.save(false),true);return p;};
+  seed('seller',[[logs,100]]);seed('buyer',[[coins,10000]]);seed('other',[[coins,10000],[logs,20]]);
+  ge.call(null,'configure',{mode:'exchange'});
+  let key=0;const call=(owner:string|null,op:string,a:any={})=>ge.call(owner,op,{...a,...(['create','edit','cancel','take'].includes(op)&&!a.key?{key:String(++key)}:{})});
+  const sell=call('seller','create',{side:'sell',item:logs,quantity:10,price:6,key:'sell'}).listing;
+  assert.equal(count('seller',logs),90);assert.equal(sell.reservedItems,10);
+  const buy=call('buyer','create',{side:'buy',item:logs,quantity:4,price:10,key:'buy'}).listing;
+  assert.equal(buy.status,'filled');assert.equal(count('buyer',logs),4);assert.equal(count('buyer',coins),9976);assert.equal(count('seller',coins),24);
+  assert.equal(call('seller','listing',{id:sell.id}).listing.reservedItems,6);
+  assert.equal(call('other','listing',{id:sell.id}).listing.reservedItems,undefined,'other escrow details stay private');
+  assert.equal(call('buyer','create',{side:'buy',item:logs,quantity:4,price:10,key:'buy'}).listing.id,buy.id,'retry exactly once');
+  assert.equal(count('buyer',logs),4);
+  assert.throws(()=>call('buyer','create',{side:'buy',item:logs,quantity:5,price:10,key:'buy'}),/Retry key/);
+  assert.throws(()=>call('seller','cancel',{id:sell.id,expectedRevision:sell.revision}),/revision/);
+  const refreshed=call('seller','listing',{id:sell.id}).listing;
+  assert.throws(()=>call('other','cancel',{id:sell.id,expectedRevision:refreshed.revision}),/owner/);
+  assert.throws(()=>call(null,'create',{side:'buy',item:logs,quantity:1,price:1}),/read-only/);
+  assert.throws(()=>call('buyer','create',{side:'buy',item:logs,quantity:2000000000,price:2}),/coin stack/);
+  assert.throws(()=>call('buyer','create',{side:'buy',item:logs,quantity:10000,price:6}),/Insufficient bank/);
+  const low=call('buyer','create',{side:'buy',item:logs,quantity:3,price:5}).listing;
+  assert.equal(low.filled,0);assert.equal(count('buyer',coins),9961);
+  const incoming=call('other','create',{side:'sell',item:logs,quantity:3,price:4}).listing;
+  assert.equal(incoming.filled,3);assert.equal(count('other',coins),10015,'resting bid price; no tax');
+  assert.equal(count('buyer',logs),7);
+  const before=Object.fromEntries(['seller','buyer','other'].map(name=>[name,{[coins]:count(name,coins),[logs]:count(name,logs)}]));
+  marketStore().db.exec("CREATE TRIGGER injected_bank_failure BEFORE INSERT ON bank_requests WHEN NEW.key='rollback' BEGIN SELECT RAISE(ABORT,'injected commit failure'); END");
+  assert.throws(()=>call('buyer','create',{side:'buy',item:logs,quantity:2,price:6,key:'rollback'}),/injected/);
+  for(const [name,items] of Object.entries(before))for(const [id,n] of Object.entries(items))assert.equal(count(name,Number(id)),n,'offline multi-bank rollback');
+  marketStore().db.exec('DROP TRIGGER injected_bank_failure');
+  // Current online bank is authoritative; stale checkpoint must not fund an order.
+  const online=load('buyer');World.playerLoop.add(online.username37,online);online.slot=1;World.players[1]=online;
+  online.getInventory(bankId)!.remove(coins,online.getInventory(bankId)!.getItemCount(coins)-2);
+  assert.throws(()=>call('buyer','create',{side:'buy',item:logs,quantity:1,price:6}),/Insufficient bank/);
+  const liveBefore=online.getInventory(bankId)!.getItemCount(logs);
+  marketStore().db.exec("CREATE TRIGGER injected_bank_failure BEFORE INSERT ON bank_requests WHEN NEW.key='rollback' BEGIN SELECT RAISE(ABORT,'injected commit failure'); END");
+  assert.throws(()=>call('buyer','create',{side:'sell',item:logs,quantity:1,price:100,key:'rollback'}),/injected/);
+  assert.equal(online.getInventory(bankId)!.getItemCount(logs),liveBefore,'live rollback');
+  marketStore().db.exec('DROP TRIGGER injected_bank_failure');
+  online.save();online.unlink();World.players[1]=null;
+  const current=call('seller','listing',{id:sell.id}).listing;
+  // Failed replacement is atomic, including its old refund and reservation.
+  assert.throws(()=>call('seller','edit',{id:sell.id,expectedRevision:current.revision,quantity:1000}),/Insufficient bank/);
+  assert.equal(call('seller','listing',{id:sell.id}).listing.revision,current.revision);
+  const replacement=call('seller','edit',{id:sell.id,expectedRevision:current.revision,quantity:8,price:7}).listing;
+  assert.notEqual(replacement.id,sell.id);assert.equal(replacement.quantity,4);assert.equal(replacement.reservedItems,4);
+  const balanceBefore=count('seller',logs);
+  call('seller','cancel',{id:replacement.id,expectedRevision:replacement.revision});
+  assert.equal(count('seller',logs),balanceBefore+4);
+  // Bank-full refund stays visible and returns exactly once when room is made.
+  const full=call('seller','create',{side:'sell',item:logs,quantity:2,price:20}).listing;
+  const p=load('seller'),b=p.getInventory(bankId)!;
+  for(let slot=0;slot<b.capacity;slot++)b.set(slot,{id:coins,count:1});
+  marketStore().checkpoint('seller',p.save(false),true);
+  const cancelled=call('seller','cancel',{id:full.id,expectedRevision:full.revision}).listing;
+  assert.equal(cancelled.deliveryPending.items,2);assert.equal(count('seller',logs),0);
+  const room=load('seller');room.getInventory(bankId)!.set(0,null);marketStore().checkpoint('seller',room.save(false),true);
+  ge.sync();ge.sync();assert.equal(count('seller',logs),2);
+  assert.equal(call('seller','listing',{id:full.id}).listing.deliveryPending.items,0);
+  const exp=call('other','create',{side:'sell',item:logs,quantity:2,price:50}).listing;
+  marketStore().db.query('UPDATE bank_order_meta SET expires=0 WHERE id=?').run(exp.id);const preExpiry=count('other',logs);ge.sync();assert.equal(count('other',logs),preExpiry+2);
+  // Self-trades stay open; disabling while reserved is refused.
+  const self=call('other','create',{side:'sell',item:logs,quantity:1,price:1}).listing;
+  const selfBuy=call('other','create',{side:'buy',item:logs,quantity:1,price:1}).listing;
+  assert.equal(selfBuy.filled,0);assert.equal(call('other','listing',{id:self.id}).listing.filled,0);
+  assert.throws(()=>call(null,'configure',{mode:'broker'}),/Cancel orders/);
+  World.loginRequests.set('transition',{} as any);
+  assert.throws(()=>call('other','create',{side:'buy',item:logs,quantity:1,price:1}),/transition/);
+  World.loginRequests.clear();
+  const history=call(null,'fills').fills;assert.equal(history.length,2);assert.equal(call(null,'price',{item:logs}).windows[0].overall.units,7);
+  assert.equal(marketStore().offers('other').length,0,'game UI cannot expose bank offers');
+  const expected=Object.fromEntries(['seller','buyer','other'].map(name=>[name,{[coins]:count(name,coins),[logs]:count(name,logs)}]));
+  marketStore().db.close();
+  const child=Bun.spawnSync([process.execPath,import.meta.path,'verify',JSON.stringify(expected)],{cwd:process.cwd(),env:process.env,stdout:'pipe',stderr:'pipe'});
+  assert.equal(child.exitCode,0,new TextDecoder().decode(child.stderr));
+  console.log(new TextDecoder().decode(child.stdout));
+  console.log('Bank exchange integration passed: reservations, matching, improvements, privacy, duplicate retries, stale revisions, online/offline rollback, edits, full-bank recovery, expiry, self-trade rejection, transition guards and process restart');
+} finally {
+  try{marketStore().db.close();}catch{}
+  rmSync(dir,{recursive:true,force:true});
+  await Promise.all([World.loginThread.terminate(),World.friendThread.terminate(),World.loggerThread.terminate()]);
+}

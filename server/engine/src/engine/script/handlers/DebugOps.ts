@@ -1,3 +1,4 @@
+import { communityShopAllows } from '#/util/CommunityCrafting.js';
 import { CoordGrid } from '#/engine/CoordGrid.js';
 import { openExchange } from '#/engine/market/GrandExchange.js';
 import { ScriptOpcode } from '#/engine/script/ScriptOpcode.js';
@@ -9,6 +10,10 @@ import Environment from '#/util/Environment.js';
 const LEADERBOARD_RUNITE_ROCKS: Set<number> = new Set([CoordGrid.packCoord(0, 3059, 3885), CoordGrid.packCoord(0, 3060, 3884)]);
 
 const DebugOps: CommandHandlers = {
+    [ScriptOpcode.COMMUNITY_SHOP_ALLOWED]: state => {
+        const [inv,obj]=state.popInts(2);
+        state.pushInt(communityShopAllows(inv,obj)?1:0);
+    },
     [ScriptOpcode.GE_OPEN]: state => {
         const { level, x, z } = CoordGrid.unpackCoord(state.popInt());
         if (level === 0) openExchange(state.activePlayer, x, z);

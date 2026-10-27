@@ -3,6 +3,7 @@ export default class ClientGameProt {
 
     static readonly MARKET_SEARCH = new ClientGameProt(243, -1); // rs-sdk: bounded GE text/select
 
+    static readonly ENCOUNTER_SUBSCRIBE = new ClientGameProt(254, 0);
     static readonly NO_TIMEOUT = new ClientGameProt(181, 0);
 
     static readonly IDLE_TIMER = new ClientGameProt(145, 0);

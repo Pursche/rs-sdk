@@ -1,3 +1,4 @@
+import type {EncounterCause} from '#/engine/entity/tracking/EncounterJournal.js';
 import ScriptFile from '#/engine/script/ScriptFile.js';
 import ScriptState from '#/engine/script/ScriptState.js';
 import Linkable from '#/datastruct/Linkable.js';
@@ -36,6 +37,7 @@ export class PlayerQueueRequest extends Linkable {
     delay: number;
 
     lastInt: number = 0;
+    encounterCause?:EncounterCause;
 
     constructor(type: QueueType, script: ScriptFile, args: ScriptArgument[], delay: number) {
         super();

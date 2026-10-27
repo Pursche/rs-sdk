@@ -2,6 +2,21 @@
 // this is a talk opt and probably(?) had a dialogue, but the op was replaced with trade
 // in mid-2005 so I have no idea what the dialogue would've been and would rather not guess
 // todo: find out what the dialogue was
+if (community_shop_allowed(inv, barbed_bolttips) = false) {
+    if_sethide(tickets_shop:com_88, true);
+} else {
+    if_sethide(tickets_shop:com_88, false);
+}
+if (community_shop_allowed(inv, rune_arrow) = false) {
+    if_sethide(tickets_shop:com_90, true);
+} else {
+    if_sethide(tickets_shop:com_90, false);
+}
+if (community_shop_allowed(inv, adamant_javelin) = false) {
+    if_sethide(tickets_shop:com_97, true);
+} else {
+    if_sethide(tickets_shop:com_97, false);
+}
 if_openmain(tickets_shop);
 
 [if_button,tickets_shop:com_88] @tickets_shop_buy(barbed_bolttips, 30, "140", 140);
@@ -13,6 +28,10 @@ if_openmain(tickets_shop);
 
 
 [label,tickets_shop_buy](namedobj $obj, int $count, string $price_str, int $price)
+if (community_shop_allowed(inv, $obj) = false) {
+    mes("This item is unavailable from specialist shops in Community Crafting Mode.");
+    return;
+}
 if(inv_total(inv, archery_ticket) < $price) {
     mes("You'd need <$price_str> Archery Tickets to buy that.");
     return;

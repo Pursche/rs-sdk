@@ -3871,6 +3871,7 @@ export class BotActions {
         'knives': { component: 1123, slot: 2 },
         'nails': { component: 1123, slot: 3 },
         'wire': { component: 1123, slot: 3 },
+        'pickaxe head': { component: 1121, slot: 4 },
     };
 
     /**

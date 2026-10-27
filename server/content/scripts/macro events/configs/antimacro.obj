@@ -221,7 +221,7 @@ param=to_be_fixed_by_nurmof,^true
 param=fixed,rune_pickaxe
 
 [macro_bronze_pickaxehead]
-name=Pickaxe head
+name=Bronze pickaxe head
 desc=It's missing a handle.
 model=inv_pickaxe_head
 recol1s=15855
@@ -236,7 +236,7 @@ cost=1
 param=fixed,bronze_pickaxe
 
 [macro_iron_pickaxehead]
-name=Pickaxe head
+name=Iron pickaxe head
 desc=It's missing a handle.
 model=inv_pickaxe_head
 recol1s=15855
@@ -251,7 +251,7 @@ cost=139
 param=fixed,iron_pickaxe
 
 [macro_steel_pickaxehead]
-name=Pickaxe head
+name=Steel pickaxe head
 desc=It's missing a handle.
 model=inv_pickaxe_head
 2dxof=-2
@@ -264,7 +264,7 @@ cost=499
 param=fixed,steel_pickaxe
 
 [macro_mithril_pickaxehead]
-name=Pickaxe head
+name=Mithril pickaxe head
 desc=It's missing a handle.
 model=inv_pickaxe_head
 recol1s=15855
@@ -279,7 +279,7 @@ cost=1299
 param=fixed,mithril_pickaxe
 
 [macro_adamant_pickaxehead]
-name=Pickaxe head
+name=Adamant pickaxe head
 desc=It's missing a handle.
 model=inv_pickaxe_head
 recol1s=15855
@@ -294,7 +294,7 @@ cost=3199
 param=fixed,adamant_pickaxe
 
 [macro_rune_pickaxehead]
-name=Pickaxe head
+name=Rune pickaxe head
 desc=It's missing a handle.
 model=inv_pickaxe_head
 recol1s=15855

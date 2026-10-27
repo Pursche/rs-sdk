@@ -40,3 +40,10 @@ data=log,magic_logs
 data=objchoices,magic_shortbow,magic_longbow
 data=shortbow,unstrung_magic_shortbow,80,833
 data=longbow,unstrung_magic_longbow,85,915
+
+[fletching_pickaxe_handle]
+table=fletching_table
+data=item,logs
+data=product,macro_pickaxehandle,1
+data=level,15
+data=experience,150

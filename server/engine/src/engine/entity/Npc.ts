@@ -1,3 +1,4 @@
+import {recordHealth,resetEncounterActor, type EncounterCause} from '#/engine/entity/tracking/EncounterJournal.js';
 import { NpcInfoProt } from '#/network/rsbuf/index.js';
 import * as rsbuf from '#/network/rsbuf/index.js';
 import { CollisionFlag, CollisionType } from '#/engine/routefinder/index.js';
@@ -247,8 +248,9 @@ export default class Npc extends PathingEntity {
         }
     }
 
-    enqueueScript(queueId: number, delay = 0, arg: number = 0) {
+    enqueueScript(queueId: number, delay = 0, arg: number = 0, encounterCause?:EncounterCause) {
         const request = new NpcQueueRequest(queueId, [], delay);
+        request.encounterCause=encounterCause;
         request.lastInt = arg;
         this.queue.addTail(request);
     }
@@ -288,6 +290,7 @@ export default class Npc extends PathingEntity {
     // Very awkward function - needs to be reworked
     resetEntity(respawn: boolean) {
         if (respawn) {
+            resetEncounterActor(this);
             this.type = this.baseType;
             this.uid = (this.type << 16) | this.nid;
             this.unfocus();
@@ -441,6 +444,7 @@ export default class Npc extends PathingEntity {
     }
 
     changeType(type: number, duration: number, reset: boolean = true) {
+        const hpBeforeTransform=this.levels[NpcStat.HITPOINTS];
         if (!this.isActive || duration < 1) {
             return;
         }
@@ -458,6 +462,8 @@ export default class Npc extends PathingEntity {
                 this.baseLevels[index] = level;
             }
         }
+        recordHealth(this,hpBeforeTransform,{source:null,identity:null,cause:'npc_transformation',script:'engine:npc_transformation'},this.levels[NpcStat.HITPOINTS]>hpBeforeTransform?'healing':'stat_loss');
+
         if (type === this.baseType && this.lifecycle === EntityLifeCycle.RESPAWN) {
             this.setLifeCycle(-1);
         } else {
@@ -486,7 +492,7 @@ export default class Npc extends PathingEntity {
         this.masks |= NpcInfoProt.SPOT_ANIM;
     }
 
-    applyDamage(damage: number, type: number) {
+    applyDamage(damage: number, type: number, encounterCause:EncounterCause|null=null) {
         const current = this.levels[NpcStat.HITPOINTS];
         if (current - damage <= 0) {
             this.levels[NpcStat.HITPOINTS] = 0;
@@ -505,6 +511,7 @@ export default class Npc extends PathingEntity {
             this.masks |= NpcInfoProt.DAMAGE;
         }
         this.hitmarkSlot++;
+        recordHealth(this,current,encounterCause,'damage');
     }
 
     say(text: string) {
@@ -543,6 +550,7 @@ export default class Npc extends PathingEntity {
                 } else if (stat > baseStat) {
                     this.levels[index]--;
                 }
+                if(index===NpcStat.HITPOINTS)recordHealth(this,stat,{source:null,identity:null,cause:'npc_regeneration',script:'engine:npc_regeneration'},this.levels[index]>stat?'healing':'stat_loss');
             }
         }
     }
@@ -576,6 +584,7 @@ export default class Npc extends PathingEntity {
                 if (script) {
                     const state = ScriptRunner.init(script, this, null, request.args);
                     state.lastInt = request.lastInt;
+                    state.encounterCause=request.encounterCause;
                     this.executeScript(state);
                 }
             }

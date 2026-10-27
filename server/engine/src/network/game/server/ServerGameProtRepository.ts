@@ -34,6 +34,8 @@ import LocMergeEncoder from '#/network/game/server/codec/LocMergeEncoder.js';
 import LogoutEncoder from '#/network/game/server/codec/LogoutEncoder.js';
 import MapAnimEncoder from '#/network/game/server/codec/MapAnimEncoder.js';
 import MapProjAnimEncoder from '#/network/game/server/codec/MapProjAnimEncoder.js';
+import EncounterMessage from '#/network/game/server/model/EncounterMessage.js';
+import EncounterMessageEncoder from '#/network/game/server/codec/EncounterMessageEncoder.js';
 import MessageGameEncoder from '#/network/game/server/codec/MessageGameEncoder.js';
 import MessagePrivateEncoder from '#/network/game/server/codec/MessagePrivateEncoder.js';
 import MessagePublicEncoder from '#/network/game/server/codec/MessagePublicEncoder.js';
@@ -198,6 +200,7 @@ class ServerGameProtRepository {
         this.bind(Logout, new LogoutEncoder());
         this.bind(MapAnim, new MapAnimEncoder());
         this.bind(MapProjAnim, new MapProjAnimEncoder());
+        this.bind(EncounterMessage, new EncounterMessageEncoder());
         this.bind(MessageGame, new MessageGameEncoder());
         this.bind(MessagePrivate, new MessagePrivateEncoder());
         this.bind(MessagePublic, new MessagePublicEncoder());

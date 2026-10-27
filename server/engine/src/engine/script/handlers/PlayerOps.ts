@@ -1,3 +1,4 @@
+import {recordHealth,scriptEncounterCause,queueEncounterCause} from '#/engine/entity/tracking/EncounterJournal.js';
 import IdkType from '#/cache/config/IdkType.js';
 import LocType from '#/cache/config/LocType.js';
 import NpcType from '#/cache/config/NpcType.js';
@@ -105,7 +106,7 @@ const PlayerOps: CommandHandlers = {
             throw new Error(`Unable to find queue script: ${scriptId}`);
         }
 
-        state.activePlayer.enqueueScript(script, PlayerQueueType.STRONG, delay, [arg]);
+        state.activePlayer.enqueueScript(script, PlayerQueueType.STRONG, delay, [arg],queueEncounterCause(state,script.name,state.activePlayer));
     },
 
     [ScriptOpcode.STRONGQUEUEVARARG]: state => {
@@ -117,7 +118,7 @@ const PlayerOps: CommandHandlers = {
             throw new Error(`Unable to find queue script: ${scriptId}`);
         }
 
-        state.activePlayer.enqueueScript(script, PlayerQueueType.STRONG, delay, args);
+        state.activePlayer.enqueueScript(script, PlayerQueueType.STRONG, delay, args,queueEncounterCause(state,script.name,state.activePlayer));
     },
 
     // https://x.com/JagexAsh/status/1698973910048403797
@@ -129,7 +130,7 @@ const PlayerOps: CommandHandlers = {
             throw new Error(`Unable to find queue script: ${scriptId}`);
         }
 
-        state.activePlayer.enqueueScript(script, PlayerQueueType.WEAK, delay, [arg]);
+        state.activePlayer.enqueueScript(script, PlayerQueueType.WEAK, delay, [arg],queueEncounterCause(state,script.name,state.activePlayer));
     },
 
     [ScriptOpcode.WEAKQUEUEVARARG]: state => {
@@ -141,7 +142,7 @@ const PlayerOps: CommandHandlers = {
             throw new Error(`Unable to find queue script: ${scriptId}`);
         }
 
-        state.activePlayer.enqueueScript(script, PlayerQueueType.WEAK, delay, args);
+        state.activePlayer.enqueueScript(script, PlayerQueueType.WEAK, delay, args,queueEncounterCause(state,script.name,state.activePlayer));
     },
 
     // https://x.com/JagexAsh/status/1698973910048403797
@@ -154,7 +155,7 @@ const PlayerOps: CommandHandlers = {
             throw new Error(`Unable to find queue script: ${scriptId}`);
         }
 
-        state.activePlayer.enqueueScript(script, PlayerQueueType.NORMAL, delay, [arg]);
+        state.activePlayer.enqueueScript(script, PlayerQueueType.NORMAL, delay, [arg],queueEncounterCause(state,script.name,state.activePlayer));
     },
 
     [ScriptOpcode.QUEUEVARARG]: state => {
@@ -166,7 +167,7 @@ const PlayerOps: CommandHandlers = {
             throw new Error(`Unable to find queue script: ${scriptId}`);
         }
 
-        state.activePlayer.enqueueScript(script, PlayerQueueType.NORMAL, delay, args);
+        state.activePlayer.enqueueScript(script, PlayerQueueType.NORMAL, delay, args,queueEncounterCause(state,script.name,state.activePlayer));
     },
 
     [ScriptOpcode.LONGQUEUE]: state => {
@@ -177,7 +178,7 @@ const PlayerOps: CommandHandlers = {
             throw new Error(`Unable to find queue script: ${scriptId}`);
         }
 
-        state.activePlayer.enqueueScript(script, PlayerQueueType.LONG, delay, [logoutAction, arg]);
+        state.activePlayer.enqueueScript(script, PlayerQueueType.LONG, delay, [logoutAction, arg],queueEncounterCause(state,script.name,state.activePlayer));
     },
 
     [ScriptOpcode.LONGQUEUEVARARG]: state => {
@@ -189,7 +190,7 @@ const PlayerOps: CommandHandlers = {
             throw new Error(`Unable to find queue script: ${scriptId}`);
         }
 
-        state.activePlayer.enqueueScript(script, PlayerQueueType.LONG, delay, [logoutAction, ...args]);
+        state.activePlayer.enqueueScript(script, PlayerQueueType.LONG, delay, [logoutAction, ...args],queueEncounterCause(state,script.name,state.activePlayer));
     },
 
     // https://x.com/JagexAsh/status/1806246992797921391
@@ -527,6 +528,7 @@ const PlayerOps: CommandHandlers = {
             player.heroPoints.clear();
         }
         if (added !== current) {
+            if(stat===PlayerStat.HITPOINTS)recordHealth(player,current,{source:null,identity:null,cause:'stat_add',script:String(state.frames[0]?.script.name??state.script.name)},player.levels[stat]>current?'healing':'stat_loss');
             player.changeStat(stat);
         }
     },
@@ -544,6 +546,7 @@ const PlayerOps: CommandHandlers = {
         const subbed = current - ((constant + (base * percent) / 100) | 0);
         player.levels[stat] = Math.max(subbed, 0);
         if (subbed !== current) {
+            if(stat===PlayerStat.HITPOINTS)recordHealth(player,current,{source:null,identity:null,cause:'stat_sub',script:String(state.frames[0]?.script.name??state.script.name)},player.levels[stat]>current?'healing':'stat_loss');
             player.changeStat(stat);
         }
     },
@@ -566,6 +569,7 @@ const PlayerOps: CommandHandlers = {
             player.heroPoints.clear();
         }
         if (boosted !== current) {
+            if(stat===PlayerStat.HITPOINTS)recordHealth(player,current,{source:null,identity:null,cause:'stat_boost',script:String(state.frames[0]?.script.name??state.script.name)},player.levels[stat]>current?'healing':'stat_loss');
             player.changeStat(stat);
         }
     },
@@ -583,6 +587,7 @@ const PlayerOps: CommandHandlers = {
         const subbed = current - ((constant + (current * percent) / 100) | 0);
         player.levels[stat] = Math.max(subbed, 0);
         if (subbed !== current) {
+            if(stat===PlayerStat.HITPOINTS)recordHealth(player,current,{source:null,identity:null,cause:'stat_drain',script:String(state.frames[0]?.script.name??state.script.name)},player.levels[stat]>current?'healing':'stat_loss');
             player.changeStat(stat);
         }
     },
@@ -625,6 +630,7 @@ const PlayerOps: CommandHandlers = {
         }
 
         if (healed !== current) {
+            if(stat===PlayerStat.HITPOINTS)recordHealth(player,current,{source:null,identity:null,cause:'stat_heal',script:String(state.frames[0]?.script.name??state.script.name)},player.levels[stat]>current?'healing':'stat_loss');
             player.changeStat(stat);
         }
     },
@@ -827,7 +833,7 @@ const PlayerOps: CommandHandlers = {
             return;
         }
 
-        player.applyDamage(amount, type);
+        player.applyDamage(amount, type,scriptEncounterCause(state,player));
     },
 
     [ScriptOpcode.IF_ADDRESUMEBUTTON]: state => {

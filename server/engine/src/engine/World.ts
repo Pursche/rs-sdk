@@ -1,3 +1,4 @@
+import { loadCommunityCraftingItems, restockShop } from '#/util/CommunityCrafting.js';
 import { activeWorldSettings } from '#/util/WorldSettings.js';
 import { tickExchange } from '#/engine/market/GrandExchange.js';
 import { playerSaveStore } from '#/engine/market/MarketStore.js';
@@ -264,6 +265,9 @@ class World {
         EnumType.load('data/pack');
         StructType.load('data/pack');
         InvType.load('data/pack');
+        DbTableType.load('data/pack');
+        DbRowType.load('data/pack');
+        loadCommunityCraftingItems();
 
         if (clearInvs) {
             this.invs.clear();
@@ -283,8 +287,6 @@ class World {
         }
 
         MesanimType.load('data/pack');
-        DbTableType.load('data/pack');
-        DbRowType.load('data/pack');
         DbTableIndex.init();
         HuntType.load('data/pack');
         VarNpcType.load('data/pack');
@@ -1368,38 +1370,7 @@ class World {
         for (const inv of this.invs) {
             inv.resetTracking();
 
-            // Increase or Decrease shop stock
-            const invType = InvType.get(inv.type);
-
-            if (!invType.restock || !invType.stockcount || !invType.stockrate) {
-                continue;
-            }
-
-            for (let index: number = 0; index < inv.items.length; index++) {
-                const item = inv.items[index];
-                if (!item) {
-                    continue;
-                }
-                // Item stock is under min
-                if (item.count < invType.stockcount[index] && tick % invType.stockrate[index] === 0) {
-                    inv.add(item.id, 1, index);
-                    inv.update = true;
-                    continue;
-                }
-                // Item stock is over min
-                if (item.count > invType.stockcount[index] && tick % invType.stockrate[index] === 0) {
-                    inv.remove(item.id, 1, index);
-                    inv.update = true;
-                    continue;
-                }
-
-                // Item stock is not listed, such as general stores
-                // Tested on low and high player count worlds, ever 1 minute stock decreases.
-                if (invType.allstock && !invType.stockcount[index] && tick % World.INV_STOCKRATE === 0) {
-                    inv.remove(item.id, 1, index);
-                    inv.update = true;
-                }
-            }
+            restockShop(inv, tick);
         }
 
         rsbuf.cleanup();

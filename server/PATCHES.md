@@ -119,6 +119,10 @@ survival) is described in the project memory; this file is the human-readable ch
       staffmodlevel on non-production worlds** (public server safety).
 
 ### Gameplay / safety
+- [ ] **Panel world-curve bounds** — `src/util/WorldSettings.ts` accepts divisors 6–20,
+      with standard default 7. Panel UI/backend must use the same bounds; clients
+      consume engine-provided XP thresholds. Verify: `bun test test/world-settings.test.ts`
+      from `server/engine` (isolated persistence, threshold and boundary checks).
 - [ ] **XP curve** — `entity/Player.ts` `getExpByLevel` table: delta uses `level/7.0`
       (standard RuneScape curve), table stored in ×10 "fine" units (`Math.floor(acc/4) * 10`), L99 =
       130,344,310 fine XP (13,034,431 real XP). **Duplicated in webclient — keep in sync (see below).**
@@ -470,3 +474,68 @@ tail -1 server/content/pack/{loc,npc}.pack
 
 If content map files changed: regenerate `sdk/collision-data.json` from the MEMBERS prod server:
 `curl https://rs-sdk-demo.fly.dev/api/exportCollision > sdk/collision-data.json`
+
+## Community Crafting Mode (2026-10-27)
+
+- Persistent, default-off `communityCraftingMode` world rule, changed through the
+  authenticated world-settings endpoint. Suppress NPC supply of packed Smithing
+  and Fletching products, Black metal equipment, higher pickaxes and ranged
+  equipment/components. Bronze axe and pickaxe remain starter exceptions.
+- General stores retain only successfully deposited player quantities, including
+  supplies recorded before enabling the mode; these finite quantities neither
+  replenish nor decay. Specialist shops reject restricted purchases and sales
+  before transferring goods or payment. Notes share their ordinary-item policy;
+  the Ranging Guild ticket shop also enforces it. Stock provenance is in memory
+  like existing shop inventory and resets on engine restart. Disabling restores
+  ordinary NPC stock. Loot, quests and other rewards remain unchanged.
+- Add six Smithing head recipes (two matching bars at levels 5/20/35/55/75/90),
+  metal-specific names and one-log Fletching handles (level 15, retained knife,
+  15 XP). Existing ungated reassembly is unchanged. These recipes work in both
+  modes. The new Smithing slot preserves studs/claws and is supported by the SDK.
+- Verify with `bun test sdk/test/smithing-products.test.ts` and, from
+  `server/engine`, `bun test test/community-crafting.test.ts
+  test/world-settings.test.ts test/shop-capacity.test.ts test/shop-pricing.test.ts`.
+  The crafting fixture executes actual compiled shop/production/repair scripts
+  without touching live characters. Repack custom content before these tests.
+- Custom-content packing: from `server/engine`, use
+  `BUILD_VERIFY=false bun run build` for this build only. Modified content cannot
+  match the vanilla fixed cache CRCs; do not persistently disable verification in
+  service startup. Regenerate ignored dbrow packs and preserve tracked interface
+  ID ordering when syncing upstream.
+
+## Authoritative encounter protocol and positions (2026-10-27)
+
+- Engine HP mutations emit actual applied damage, healing/stat changes and a
+  lethal-event reference. Snapshots contain public actor identity, current/max HP
+  and absolute event-time x/z/plane for source and target. Queues preserve their
+  scheduling origin through NPC/PvP projectiles, poison and recoil. Source epochs
+  prevent borrowing a respawned player's or NPC's position; removed sources retain
+  identity with null health/position. Unknown scripted sources remain explicit.
+- Loot credit is unchanged and separate from lethal-source attribution. All
+  hitmarks, damage amounts, timing, death/respawn scripts and item loss remain
+  gameplay-authoritative. Logging does not apply damage or healing itself.
+- Both directions reserve opcode 254 independently: client ENCOUNTER_SUBSCRIBE
+  is zero-length; server ENCOUNTER_EVENTS uses a two-byte length. Keep engine
+  protocol repositories, client enums, ServerProtSizes[254] and both browser/lite
+  dispatchers aligned. A normal game message advertises support; new clients
+  intercept it and opt in once per login. Old clients get no unknown packet, and
+  new clients do not request the opcode from old servers. Payloads use ASCII-
+  escaped JSON in the existing game string codec and one event per packet.
+- Reports are private to involved players. Recent NPC healing can be observed by
+  its participants, without exposing third parties' unrelated hits. There is no
+  arbitrary-player subscription or global combat feed. Per-recipient stream IDs,
+  bounded ten-second replay, explicit eviction counts and latest-own-death pinning
+  support reconnect/deduplication. serverEncounter is forwarded through the SDK;
+  sdk/types.ts defines its public shape and sdk/API.md is regenerated.
+- Verify `bun run check` at SDK root. Real-engine fixture:
+  `cd server/engine && bun test test/encounter.test.ts`; this runs compiled queued
+  NPC/PvP damage, poison and recoil scripts in a disposable directory, including
+  health caps, source lifetimes, event-time positions, privacy and codec tests.
+  Browser/lite negotiation, framing and replay tests are under their usual test
+  directories. Build both browser clients with `cd server/webclient && bun run build`.
+  No content pack/checksum override is needed for these TypeScript-only changes.
+- Poison provenance is in memory, so poison loaded from a prior save/restart may
+  have unknown source. Generic script healing identifies its actual execution
+  path and HP change, without inventing an eaten item. Actor snapshots are not
+  omniscient fleet observations. The panel's spec/authoritative-encounters.md
+  documents report persistence, unknowns and bounded historical paging.

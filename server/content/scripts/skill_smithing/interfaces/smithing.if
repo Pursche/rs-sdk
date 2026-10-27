@@ -1457,3 +1457,31 @@ height=4
 option1=Make
 option2=Make 5
 option3=Make 10
+
+[community_pickaxe_head_label]
+type=text
+x=214
+y=292
+width=80
+height=14
+script1op1=pushvar,modified_smith
+script1=gt,5
+center=yes
+font=p12_full
+text=Pickaxe head
+activecolour=0xFFFFFF
+
+[community_pickaxe_head_bars]
+type=text
+x=269
+y=270
+width=30
+height=14
+script1op1=pushvar,smithbars
+script1=gt,1
+center=yes
+font=p12_full
+shadowed=yes
+text=2bars
+colour=0xC00000
+activecolour=0x00C000

@@ -1,4 +1,5 @@
 export const enum ServerProt {
+    ENCOUNTER_EVENTS = 254,
     // interfaces
     IF_OPENCHAT = 81,
     IF_OPENMAIN_SIDE = 55,
@@ -124,5 +125,5 @@ export const ServerProtSizes = [
     0, 0, 0, 6, 0, 1, 0, 0, 0, 0,
     0, 0, 0, -1, 4, 0, 0, 1, 0, 0,
     // rs-sdk: index 255 = -1 (MESSAGE_PUBLIC, variable-length)
-    0, 0, 2, 10, 0, -1, 0
+    0, 0, 2, 10, -2, -1, 0
 ];

@@ -1,3 +1,5 @@
+import { activeWorldSettings } from '#/util/WorldSettings.js';
+import { communityRestricted, communityShop, communityShopAllows } from '#/util/CommunityCrafting.js';
 import InvType from '#/cache/config/InvType.js';
 import ObjType from '#/cache/config/ObjType.js';
 
@@ -40,6 +42,7 @@ export class Inventory {
             }
         }
 
+        container.applyCommunityCrafting();
         return container;
     }
 
@@ -50,6 +53,27 @@ export class Inventory {
     readonly capacity: number;
     readonly type: number; // inv ID
     readonly items: (Item | null)[];
+
+    // Only successful player deposits count as finite general-store resale.
+    readonly playerShopStock = new Map<number, number>();
+
+    applyCommunityCrafting() {
+        if (!communityShop(this.type)) return;
+        const type = InvType.get(this.type);
+        if (activeWorldSettings.communityCraftingMode) {
+            for (let slot = 0; slot < this.capacity; slot++) {
+                const item = this.items[slot];
+                if (!item || !communityRestricted(item.id)) continue;
+                const count = type.allstock ? Math.min(item.count, this.playerShopStock.get(item.id) ?? 0) : 0;
+                this.set(slot, count > 0 ? {id:item.id,count} : null);
+            }
+        } else if (type.stockobj && type.stockcount) {
+            for (let i=0;i<type.stockobj.length;i++) {
+                const id=type.stockobj[i];
+                if (communityRestricted(id)) this.add(id, Math.max(0,type.stockcount[i]-this.getItemCount(id)), -1, 'stock');
+            }
+        }
+    }
 
     update = false;
     readonly dirtySlots: Set<number> = new Set();
@@ -96,6 +120,7 @@ export class Inventory {
     }
 
     removeAll() {
+        this.playerShopStock.clear();
         for (let slot = 0; slot < this.capacity; slot++) {
             if (this.items[slot] !== null) {
                 this.items[slot] = null;
@@ -104,7 +129,10 @@ export class Inventory {
         }
     }
 
-    add(id: number, count = 1, beginSlot = -1) {
+    add(id: number, count = 1, beginSlot = -1, source: 'player'|'stock' = 'player') {
+        if (count <= 0) return 0;
+        if (communityShop(this.type) && activeWorldSettings.communityCraftingMode && communityRestricted(id) &&
+            (source === 'stock' || !communityShopAllows(this.type,id))) return 0;
         const type = ObjType.get(id);
         const stack = this.stackType != Inventory.NEVER_STACK && (type.stackable || this.stackType == Inventory.ALWAYS_STACK);
 
@@ -146,11 +174,16 @@ export class Inventory {
             completed = total - stackCount;
         }
 
+        if (communityShop(this.type) && InvType.get(this.type).allstock && source === 'player' && completed > 0)
+            this.playerShopStock.set(id, (this.playerShopStock.get(id) ?? 0) + completed);
         return completed;
     }
 
     remove(id: number, count = 1, beginSlot = -1) {
-        const stockObj = InvType.get(this.type).stockobj?.includes(id) === true;
+        if (communityShop(this.type) && !communityShopAllows(this.type,id)) return 0;
+        const before = this.getItemCount(id);
+        const stockObj = InvType.get(this.type).stockobj?.includes(id) === true &&
+            !(communityShop(this.type) && activeWorldSettings.communityCraftingMode && communityRestricted(id));
 
         let totalRemoved = 0;
 
@@ -210,6 +243,10 @@ export class Inventory {
             }
         }
 
+        if (this.playerShopStock.has(id)) {
+            const supplied=this.playerShopStock.get(id)!;
+            this.playerShopStock.set(id, Math.max(0,supplied-Math.max(0,totalRemoved-(before-supplied))));
+        }
         return totalRemoved;
     }
 

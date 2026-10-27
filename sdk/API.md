@@ -316,6 +316,18 @@
 
 ## Result and state types
 
+### ServerEncounterState
+
+```typescript
+interface ServerEncounterState {
+  version: 1 | null;
+  stream: string | null;
+  ownerId: string | null;
+  events: ServerEncounterEvent[];
+  dropped: number;
+}
+```
+
 ### PlayerCombatState
 
 Combat state tracking for player
@@ -570,6 +582,7 @@ interface BotWorldState {
   modalInterface: number;
   combatStyle?: CombatStyleState;
   combatEvents: CombatEvent[];
+  serverEncounter?:ServerEncounterState;
   prayers: PrayerState;
   /** Absent when the connected client predates authoritative PK-skull telemetry. */
   isSkulled?: boolean;

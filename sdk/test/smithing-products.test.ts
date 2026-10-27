@@ -24,3 +24,17 @@ test('bank IDs are explicit and numeric-slot mistakes explain the actual selecto
     expect((await bot.withdrawItem(436,2)).message).toContain('expects a bank SLOT');expect(calls).toBe(0);
     expect(await bot.withdrawItem({id:436},2)).toMatchObject({success:true,amountWithdrawn:2});expect(calls).toBe(1);
 });
+
+
+test('pickaxe heads use the free armour-column slot and matching metal bars',async()=>{
+    const sdk=new BotSDK({botUsername:'test',password:'test',autoLaunchBrowser:false});
+    const state:any={tick:1,player:{animId:-1},inventory:[{id:2347,name:'Hammer',slot:0,count:1},{id:2351,name:'Iron bar',slot:1,count:2}],equipment:[],skills:[{name:'Smithing',experience:1000}],nearbyLocs:[{id:2783,name:'Anvil',x:1,z:1,distance:1}],gameMessages:[],dialog:{isOpen:false},interface:{isOpen:false}};
+    (sdk as any).state=state;
+    sdk.sendUseItemOnLoc=async()=>{state.interface={isOpen:true,interfaceId:994};return {success:true,message:'Opened'};};
+    sdk.sendClickComponentWithOption=async(component,option,slot)=>{
+        expect([component,option,slot]).toEqual([1121,1,4]);
+        state.inventory=[state.inventory[0],{id:480,name:'Iron pickaxe head',slot:1,count:1}];state.skills[0].experience+=50;
+        return {success:true,message:'Smithed'};
+    };
+    expect(await new BotActions(sdk).smithAtAnvil('iron pickaxe head')).toMatchObject({success:true,product:{name:'Iron pickaxe head'},xpGained:50});
+});

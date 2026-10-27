@@ -1,3 +1,4 @@
+import {EncounterSubscribeDecoder,EncounterSubscribeHandler} from '#/network/game/client/EncounterSubscribe.js';
 import MarketSearchDecoder from '#/network/game/client/codec/MarketSearchDecoder.js';
 import MarketSearchHandler from '#/network/game/client/handler/MarketSearchHandler.js';
 import ClientGameProt from '#/network/game/client/ClientGameProt.js';
@@ -108,6 +109,7 @@ class ClientGameProtRepository {
 
     constructor() {
         this.bind(new ClientCheatDecoder(), new ClientCheatHandler());
+        this.bind(new EncounterSubscribeDecoder(), new EncounterSubscribeHandler());
         this.bind(new CloseModalDecoder(), new CloseModalHandler());
         this.bind(new FriendListAddDecoder(), new FriendListAddHandler());
         this.bind(new FriendListDelDecoder(), new FriendListDelHandler());

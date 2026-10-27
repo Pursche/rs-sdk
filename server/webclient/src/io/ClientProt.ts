@@ -1,4 +1,5 @@
 export const enum ClientProt {
+    ENCOUNTER_SUBSCRIBE = 254,
     MARKET_SEARCH = 243, // rs-sdk: query string + displayed item ID (0 = filter)
     NO_TIMEOUT = 181, // index: 6 - NXT naming
 

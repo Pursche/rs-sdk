@@ -1,3 +1,4 @@
+import {recordHealth,scriptEncounterCause,queueEncounterCause} from '#/engine/entity/tracking/EncounterJournal.js';
 import NpcType from '#/cache/config/NpcType.js';
 import { ParamHelper } from '#/cache/config/ParamHelper.js';
 import ParamType from '#/cache/config/ParamType.js';
@@ -184,7 +185,7 @@ const NpcOps: CommandHandlers = {
         const arg = state.popInt();
         const queueId = check(state.popInt(), QueueValid);
 
-        state.activeNpc.enqueueScript(ServerTriggerType.AI_QUEUE1 + queueId - 1, delay, arg);
+        state.activeNpc.enqueueScript(ServerTriggerType.AI_QUEUE1 + queueId - 1, delay, arg,queueEncounterCause(state,'npc_queue',state.activeNpc,queueId));
     },
 
     [ScriptOpcode.NPC_RANGE]: state => {
@@ -288,6 +289,7 @@ const NpcOps: CommandHandlers = {
         const current = npc.levels[stat];
         const healed = current + ((constant + (base * percent) / 100) | 0);
         npc.levels[stat] = Math.min(healed, base);
+        if(stat===NpcStat.HITPOINTS)recordHealth(npc,current,{source:null,identity:null,cause:'npc_heal',script:String(state.frames[0]?.script.name??state.script.name)},'healing');
 
         if (stat === NpcStat.HITPOINTS && npc.levels[stat] >= npc.baseLevels[stat]) {
             npc.heroPoints.clear();
@@ -302,7 +304,7 @@ const NpcOps: CommandHandlers = {
         const amount = check(state.popInt(), NumberNotNull);
         const type = check(state.popInt(), HitTypeValid);
 
-        state.activeNpc.applyDamage(amount, type);
+        state.activeNpc.applyDamage(amount, type,scriptEncounterCause(state,state.activeNpc));
     },
 
     [ScriptOpcode.NPC_NAME]: state => {
@@ -539,6 +541,7 @@ const NpcOps: CommandHandlers = {
         const current = npc.levels[stat];
         const added = current + ((constant + (base * percent) / 100) | 0);
         npc.levels[stat] = Math.min(added, 255);
+        if(stat===NpcStat.HITPOINTS)recordHealth(npc,current,{source:null,identity:null,cause:'npc_statadd',script:String(state.frames[0]?.script.name??state.script.name)},'healing');
     },
 
     [ScriptOpcode.NPC_STATSUB]: state => {
@@ -553,6 +556,7 @@ const NpcOps: CommandHandlers = {
         const current = npc.levels[stat];
         const subbed = current - ((constant + (base * percent) / 100) | 0);
         npc.levels[stat] = Math.max(subbed, 0);
+        if(stat===NpcStat.HITPOINTS)recordHealth(npc,current,{source:null,identity:null,cause:'npc_statsub',script:String(state.frames[0]?.script.name??state.script.name)},'stat_loss');
     },
 
     // https://twitter.com/JagexAsh/status/1614498680144527360

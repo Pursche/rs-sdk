@@ -1,3 +1,4 @@
+import {recordHealth,encounterJournal, type EncounterCause} from '#/engine/entity/tracking/EncounterJournal.js';
 import { activeWorldSettings, worldExperience } from '#/util/WorldSettings.js';
 import { displayNames } from '#/util/DisplayNames.js';
 import { playerSaveStore } from '#/engine/market/MarketStore.js';
@@ -547,6 +548,8 @@ export default class Player extends PathingEntity {
     // ----
 
     onLogin() {
+        encounterJournal(this).supported=false;
+        this.messageGame('Encounter reports available (v1).');
         // confirmed order:
         // - rebuild_normal
         // - chat_filter_settings
@@ -723,6 +726,7 @@ export default class Player extends PathingEntity {
             const delay = request.delay--;
             if (this.canAccess() && delay <= 0) {
                 const script = ScriptRunner.init(request.script, this, null, request.args);
+                script.encounterCause=request.encounterCause;
                 this.executeScript(script, true);
 
                 request.unlink();
@@ -903,8 +907,9 @@ export default class Player extends PathingEntity {
      * @param delay
      * @param args
      */
-    enqueueScript(script: ScriptFile, type: QueueType = PlayerQueueType.NORMAL, delay = 0, args: ScriptArgument[] = []) {
+    enqueueScript(script: ScriptFile, type: QueueType = PlayerQueueType.NORMAL, delay = 0, args: ScriptArgument[] = [], encounterCause?:EncounterCause) {
         const request = new PlayerQueueRequest(type, script, args, delay);
+        request.encounterCause=encounterCause;
         if (type === PlayerQueueType.ENGINE) {
             request.delay = 0;
             this.engineQueue.addTail(request);
@@ -973,6 +978,7 @@ export default class Player extends PathingEntity {
                     request.args.shift();
                 }
                 const script = ScriptRunner.init(request.script, this, null, request.args);
+                script.encounterCause=request.encounterCause;
                 this.executeScript(script, true);
             }
         }
@@ -985,6 +991,7 @@ export default class Player extends PathingEntity {
                 request.unlink();
 
                 const script = ScriptRunner.init(request.script, this, null, request.args);
+                script.encounterCause=request.encounterCause;
                 this.executeScript(script, true);
             }
         }
@@ -1910,6 +1917,7 @@ export default class Player extends PathingEntity {
             this.stats[stat] = 2_000_000_000;
         }
 
+        const hpBeforeAdvance=this.levels[PlayerStat.HITPOINTS];
         const before = this.baseLevels[stat];
         if (this.levels[stat] === this.baseLevels[stat]) {
             // only update if no buff/debuff is active
@@ -1918,6 +1926,7 @@ export default class Player extends PathingEntity {
         this.baseLevels[stat] = getLevelByExp(this.stats[stat]);
 
         if (this.baseLevels[stat] > before) {
+            if(stat===PlayerStat.HITPOINTS)recordHealth(this,hpBeforeAdvance,{source:null,identity:null,cause:'hitpoints_level_up',script:'engine:addXp'},'healing');
             this.levelPlaytime[stat] = this.playtime;
             this.levelPlaytimeMs[stat] = this.playtimeMs;
 
@@ -2014,7 +2023,7 @@ export default class Player extends PathingEntity {
         this.masks |= PlayerInfoProt.SPOT_ANIM;
     }
 
-    applyDamage(damage: number, type: number) {
+    applyDamage(damage: number, type: number, encounterCause:EncounterCause|null=null) {
         const current = this.levels[PlayerStat.HITPOINTS];
         if (current - damage <= 0) {
             this.levels[PlayerStat.HITPOINTS] = 0;
@@ -2033,6 +2042,7 @@ export default class Player extends PathingEntity {
             this.masks |= PlayerInfoProt.DAMAGE;
         }
         this.hitmarkSlot++;
+        recordHealth(this,current,encounterCause,'damage');
     }
 
     setVisibility(visibility: Visibility) {

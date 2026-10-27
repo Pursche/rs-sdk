@@ -1,3 +1,4 @@
+import type {EncounterCause} from '#/engine/entity/tracking/EncounterJournal.js';
 import { ScriptArgument } from '#/engine/entity/PlayerQueueRequest.js';
 import Linkable from '#/datastruct/Linkable.js';
 
@@ -15,6 +16,7 @@ export class NpcQueueRequest extends Linkable {
     delay: number;
 
     lastInt: number = 0;
+    encounterCause?:EncounterCause;
 
     constructor(queueId: number, args: ScriptArgument[], delay: number) {
         super();

@@ -1,3 +1,4 @@
+import {EncounterBuffer} from '../bot/encounter-events.js';
 import { worldExperience } from '#/util/WorldExperience.js';
 // A headless RS289 client that presents the exact surface the bot bridge reads.
 //
@@ -83,6 +84,7 @@ export interface LiteClientOptions {
 }
 
 export class LiteClient {
+    readonly serverEncounters=new EncounterBuffer();
     // ---- fields the bot bridge reads via `(client as any)` -------------------
     // Names and types match Client.ts exactly. Do not rename without updating
     // StateCollector.ts - tsc will not catch it, the accesses are `as any`.
@@ -232,6 +234,7 @@ export class LiteClient {
         this.localPlayer = new ClientPlayer();
         this.players[LOCAL_PLAYER_INDEX] = this.localPlayer;
         this.ingame = true;
+        this.serverEncounters.reset();
     }
 
     // ------------------------------------------------------------- main loop

@@ -1074,3 +1074,6 @@
 
 // rs-sdk: runite ore mined from a rock; the engine counts the Lava Maze rocks toward the hiscores
 [command,runite_mined](coord $rock)
+
+// Community Crafting Mode: specialist equipment stock and sales policy.
+[command,community_shop_allowed](inv $shop, obj $item)(boolean)

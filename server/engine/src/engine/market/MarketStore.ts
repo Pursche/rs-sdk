@@ -76,16 +76,27 @@ export class MarketStore {
                 coins INTEGER NOT NULL DEFAULT 0, gross INTEGER NOT NULL DEFAULT 0,
                 tax INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL,
                 CHECK(remaining>=0 AND items>=0 AND coins>=0));
-            CREATE UNIQUE INDEX IF NOT EXISTS occupied_slot ON offers(owner,slot) WHERE slot>=0;
+
             CREATE INDEX IF NOT EXISTS book ON offers(item,side,state,price,id);
             CREATE TABLE IF NOT EXISTS trades(
                 id INTEGER PRIMARY KEY AUTOINCREMENT, item INTEGER NOT NULL, buy_offer INTEGER NOT NULL,
                 sell_offer INTEGER NOT NULL, quantity INTEGER NOT NULL, price INTEGER NOT NULL,
                 gross INTEGER NOT NULL, tax INTEGER NOT NULL, time INTEGER NOT NULL);
             CREATE INDEX IF NOT EXISTS trade_history ON trades(item,time,id);`);
+        this.initBankOrders();
+    }
+    /** Bank orders share durable account checkpoints, but never match UI orders. */
+    initBankOrders() {
+        const columns = new Set((this.db.query('PRAGMA table_info(offers)').all() as {name:string}[]).map(c=>c.name));
+        if (!columns.has('channel')) this.db.exec("ALTER TABLE offers ADD COLUMN channel TEXT NOT NULL DEFAULT 'game'");
+        if (!columns.has('revision')) this.db.exec('ALTER TABLE offers ADD COLUMN revision INTEGER NOT NULL DEFAULT 0');
+        this.db.exec(`DROP INDEX IF EXISTS occupied_slot;
+            CREATE UNIQUE INDEX occupied_slot ON offers(owner,channel,slot) WHERE slot>=0;
+            CREATE TRIGGER IF NOT EXISTS offer_revision AFTER UPDATE ON offers
+            WHEN NEW.revision=OLD.revision BEGIN UPDATE offers SET revision=revision+1 WHERE id=NEW.id; END;`);
     }
     offers(owner: string): Offer[] {
-        return this.db.query<Offer, [string]>('SELECT * FROM offers WHERE owner=? AND slot>=0 ORDER BY slot').all(owner);
+        return this.db.query<Offer, [string]>("SELECT * FROM offers WHERE owner=? AND channel='game' AND slot>=0 ORDER BY slot").all(owner);
     }
     private owned(owner: string, id: number): Offer {
         const row = this.db.query<Offer, [string, number]>('SELECT * FROM offers WHERE owner=? AND id=? AND slot>=0').get(owner, id);
@@ -120,7 +131,7 @@ export class MarketStore {
             throw error;
         }
     }
-    place(account: MarketAccount, item: number, side: Side, quantity: number, price: number, coinsId: number, preferredSlot?: number): Offer {
+    place(account: MarketAccount, item: number, side: Side, quantity: number, price: number, coinsId: number, preferredSlot?: number, channel: 'game'|'bank' = 'game'): Offer {
         positive(item, 'Item');
         positive(quantity, 'Quantity');
         positive(price, 'Price');
@@ -128,22 +139,22 @@ export class MarketStore {
         // Also cap sells so price improvement never overflows a player's collection stack.
         if (quantity * price > MAX_GP) throw new Error('Offer total exceeds the coin stack limit.');
         return this.transfer(account, () => {
-            const slots = new Set(this.offers(account.owner).map(o => o.slot));
+            const slots = new Set((this.db.query('SELECT slot FROM offers WHERE owner=? AND channel=? AND slot>=0').all(account.owner,channel) as {slot:number}[]).map(o=>o.slot));
             if (preferredSlot !== undefined && (!Number.isInteger(preferredSlot) || preferredSlot < 0 || preferredSlot >= OFFER_SLOTS || slots.has(preferredSlot))) {
                 throw new Error('That offer slot is no longer empty.');
             }
             const slot = preferredSlot ?? Array.from({ length: OFFER_SLOTS }, (_, i) => i).find(i => !slots.has(i));
             if (slot === undefined) throw new Error('All offer slots are occupied. Collect a finished offer first.');
             account.take(side === 'buy' ? coinsId : item, side === 'buy' ? quantity * price : quantity);
-            const inserted = this.db.query('INSERT INTO offers(owner,slot,item,side,quantity,price,remaining,created) VALUES(?,?,?,?,?,?,?,?)').run(account.owner, slot, item, side, quantity, price, quantity, Date.now());
+            const inserted = this.db.query('INSERT INTO offers(owner,slot,item,side,quantity,price,remaining,created,channel) VALUES(?,?,?,?,?,?,?,?,?)').run(account.owner, slot, item, side, quantity, price, quantity, Date.now(), channel);
             const incoming = this.owned(account.owner, Number(inserted.lastInsertRowid));
             const matches = this.db
-                .query<Offer, [number, string, string, number]>(
+                .query<Offer, [number, string, string, string, number]>(
                     `SELECT * FROM offers
-                WHERE item=? AND side!=? AND owner!=? AND state='open' AND price ${side === 'buy' ? '<=' : '>='} ?
+                WHERE item=? AND side!=? AND owner!=? AND state='open' AND channel=? AND price ${side === 'buy' ? '<=' : '>='} ?
                 ORDER BY price ${side === 'buy' ? 'ASC' : 'DESC'},id ASC`
                 )
-                .all(item, side, account.owner, price);
+                .all(item, side, account.owner, channel, price);
             for (const resting of matches) {
                 if (!incoming.remaining) break;
                 const buy = side === 'buy' ? incoming : resting;
@@ -154,7 +165,7 @@ export class MarketStore {
                 if (!count) continue;
                 const gross = count * executionPrice;
                 // Cumulative rounding per sell offer prevents partial-fill fragmentation avoiding tax.
-                const tax = Math.floor((sell.gross + gross) / 20) - sell.tax;
+                const tax = channel === 'bank' ? 0 : Math.floor((sell.gross + gross) / 20) - sell.tax;
                 buy.remaining -= count;
                 sell.remaining -= count;
                 buy.filled += count;

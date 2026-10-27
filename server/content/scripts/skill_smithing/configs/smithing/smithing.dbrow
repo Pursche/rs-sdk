@@ -1417,3 +1417,69 @@ data=levelfailmessage,some rune claws
 data=bar,runite_bar
 data=bar_amount,2
 
+
+[bronze_pickaxe_head]
+table=smithing
+data=ifproduct,macro_bronze_pickaxehead
+data=product,macro_bronze_pickaxehead
+data=product_amount,1
+data=levelrequired,5
+data=end_message,a bronze pickaxe head
+data=levelfailmessage,a Bronze pickaxe head
+data=bar,bronze_bar
+data=bar_amount,2
+
+[iron_pickaxe_head]
+table=smithing
+data=ifproduct,macro_iron_pickaxehead
+data=product,macro_iron_pickaxehead
+data=product_amount,1
+data=levelrequired,20
+data=end_message,a iron pickaxe head
+data=levelfailmessage,a Iron pickaxe head
+data=bar,iron_bar
+data=bar_amount,2
+
+[steel_pickaxe_head]
+table=smithing
+data=ifproduct,macro_steel_pickaxehead
+data=product,macro_steel_pickaxehead
+data=product_amount,1
+data=levelrequired,35
+data=end_message,a steel pickaxe head
+data=levelfailmessage,a Steel pickaxe head
+data=bar,steel_bar
+data=bar_amount,2
+
+[mithril_pickaxe_head]
+table=smithing
+data=ifproduct,macro_mithril_pickaxehead
+data=product,macro_mithril_pickaxehead
+data=product_amount,1
+data=levelrequired,55
+data=end_message,a mithril pickaxe head
+data=levelfailmessage,a Mithril pickaxe head
+data=bar,mithril_bar
+data=bar_amount,2
+
+[adamant_pickaxe_head]
+table=smithing
+data=ifproduct,macro_adamant_pickaxehead
+data=product,macro_adamant_pickaxehead
+data=product_amount,1
+data=levelrequired,75
+data=end_message,a adamant pickaxe head
+data=levelfailmessage,a Adamant pickaxe head
+data=bar,adamantite_bar
+data=bar_amount,2
+
+[rune_pickaxe_head]
+table=smithing
+data=ifproduct,macro_rune_pickaxehead
+data=product,macro_rune_pickaxehead
+data=product_amount,1
+data=levelrequired,90
+data=end_message,a rune pickaxe head
+data=levelfailmessage,a Rune pickaxe head
+data=bar,runite_bar
+data=bar_amount,2

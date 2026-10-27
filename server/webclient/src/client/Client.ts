@@ -1,3 +1,4 @@
+import {EncounterBuffer} from '#/bot/encounter-events.js';
 import { refreshDisplayNames } from '#/datastruct/DisplayNames.js';
 import { worldExperience, loadWorldExperience } from '#/util/WorldExperience.js';
 import { MarketSearchInput, RESULT_ICON, visibleSearchComponent, SEARCH_FIELD } from '#/client/MarketSearchInput.js';
@@ -145,6 +146,7 @@ export type ClientActionResult =
     | { success: false; reason: ClientActionFailureReason };
 
 export class Client extends GameShell {
+    readonly serverEncounters=new EncounterBuffer();
     static nodeId: number = 10;
     static memServer: boolean = true;
     // rs-sdk: max public/private chat length, injected from the server's world.json
@@ -4272,6 +4274,7 @@ export class Client extends GameShell {
                 this.focus = true;
                 this.focusIn = true;
                 this.ingame = true;
+                this.serverEncounters.reset();
                 this.out.pos = 0;
                 this.in.pos = 0;
                 this.ptype = -1;
@@ -4419,6 +4422,7 @@ export class Client extends GameShell {
                 this.loginMes2 = 'Please wait 1 minute and try again.';
             } else if (response === 15) {
                 this.ingame = true;
+                this.serverEncounters.reset();
                 this.out.pos = 0;
                 this.in.pos = 0;
                 this.ptype = -1;
@@ -8993,8 +8997,11 @@ export class Client extends GameShell {
                 return true;
             }
 
+            if(this.ptype===ServerProt.ENCOUNTER_EVENTS){this.serverEncounters.receive(this.in.gjstr());this.ptype=-1;return true;}
+
             if (this.ptype === ServerProt.MESSAGE_GAME) {
                 const message: string = this.in.gjstr();
+                if(this.serverEncounters.capability(message,()=>this.out.p1Enc(ClientProt.ENCOUNTER_SUBSCRIBE))){this.ptype=-1;return true;}
 
                 if (message.endsWith(':tradereq:')) {
                     const player: string = message.substring(0, message.indexOf(':'));

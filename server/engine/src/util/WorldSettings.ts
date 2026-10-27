@@ -4,22 +4,25 @@ import Environment from './Environment.js';
 
 const path = 'data/config/panel-world.json';
 const tokenPath = 'data/config/panel-world.token';
-export type WorldSettings = { xpRate: number; curveDivisor: number; tickMs: number; stockDependentShopPricing?: boolean; unlimitedGeneralStoreSales?: boolean };
+export type WorldSettings = { xpRate: number; curveDivisor: number; tickMs: number; stockDependentShopPricing?: boolean; unlimitedGeneralStoreSales?: boolean; communityCraftingMode?: boolean };
 
 export function validateWorldSettings(value: WorldSettings): WorldSettings {
     if (!Number.isFinite(value.xpRate) || value.xpRate < 0.1 || value.xpRate > 100)
         throw new Error('XP multiplier must be between 0.1 and 100');
-    if (!Number.isFinite(value.curveDivisor) || value.curveDivisor < 7 || value.curveDivisor > 20)
-        throw new Error('Curve divisor must be between 7 and 20');
+    if (!Number.isFinite(value.curveDivisor) || value.curveDivisor < 6 || value.curveDivisor > 20)
+        throw new Error('Curve divisor must be between 6 and 20');
     if (!Number.isInteger(value.tickMs) || value.tickMs < 100 || value.tickMs > 2000)
         throw new Error('Tick duration must be an integer between 100 and 2000 ms');
     if (value.stockDependentShopPricing !== undefined && typeof value.stockDependentShopPricing !== 'boolean')
         throw new Error('Stock-dependent shop pricing must be a boolean');
     if (value.unlimitedGeneralStoreSales !== undefined && typeof value.unlimitedGeneralStoreSales !== 'boolean')
         throw new Error('Unlimited general-store sales must be a boolean');
+    if (value.communityCraftingMode !== undefined && typeof value.communityCraftingMode !== 'boolean')
+        throw new Error('Community Crafting Mode must be a boolean');
     return { xpRate: value.xpRate, curveDivisor: value.curveDivisor, tickMs: value.tickMs,
         stockDependentShopPricing: value.stockDependentShopPricing ?? false,
-        unlimitedGeneralStoreSales: value.unlimitedGeneralStoreSales ?? true };
+        unlimitedGeneralStoreSales: value.unlimitedGeneralStoreSales ?? true,
+        communityCraftingMode: value.communityCraftingMode ?? false };
 }
 
 export const activeWorldSettings = validateWorldSettings(fs.existsSync(path)

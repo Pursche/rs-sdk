@@ -1,3 +1,4 @@
+import { BankExchange } from '#/engine/market/BankExchange.js';
 import { handleMarket } from './pages/market.js';
 import { register } from 'prom-client';
 import Environment from '#/util/Environment.js';
@@ -363,10 +364,24 @@ async function handleRequest(req: Request, server: Bun.Server, url: URL): Promis
 let profileRunning = false;
 
 export async function startManagementWeb() {
+    let bankExchange: BankExchange | undefined;
+    const bank = () => bankExchange ??= new BankExchange();
+    setInterval(() => { try { if (Environment.GE_ENABLED) bank().sync(); } catch (error) { console.error('Bank exchange delivery retry failed', error); } }, 5000).unref();
     Bun.serve({
         port: Environment.WEB_MANAGEMENT_PORT,
         hostname: process.env.BIND_HOST || '0.0.0.0',
         routes: {
+            '/panel-exchange': async (req: Request) => {
+                if (req.headers.get('authorization') !== `Bearer ${worldSettingsToken}` || req.headers.has('origin')) return new Response('Forbidden', {status:403});
+                if (req.method !== 'POST') return new Response('Method not allowed', {status:405});
+                try {
+                    if (Environment.db.backend !== 'sqlite' || !Environment.easyStartup || process.env.BIND_HOST !== '127.0.0.1') throw new Error('Bank exchange requires the local single-world SQLite server');
+                    const raw = await req.text(); if(raw.length>20000)throw new Error('Request too large');
+                    const {owner,operation,args}=JSON.parse(raw);
+                    if(owner!==null&&(typeof owner!=='string'||!/^[a-z0-9_ ]{1,12}$/.test(owner)))throw new Error('Invalid owner');
+                    return Response.json(bank().call(owner,operation,args));
+                } catch(error){return Response.json({error:String(error)},{status:400});}
+            },
             '/delete-character': async (req: Request) => {
                 if (req.headers.get('authorization') !== `Bearer ${worldSettingsToken}` || req.headers.has('origin'))
                     return new Response('Forbidden', { status: 403 });
@@ -379,6 +394,11 @@ export async function startManagementWeb() {
                     const username = name.toLowerCase();
                     if (World.getPlayerByUsername(username) || World.logoutRequests.has(username) || World.loginRequests.size || World.newPlayers.size)
                         throw new Error('Wait for logout and pending logins to finish before deleting');
+                    if (bank().mode()==='exchange') {
+                        bank().sync();
+                        const listings=bank().call(username,'search',{owner:'me',status:'all',limit:50}).listings;
+                        if(listings.some((o:any)=>o.available||o.deliveryPending?.items||o.deliveryPending?.gp))throw new Error('Cancel Market orders and receive all escrow before deleting');
+                    }
                     deleteLocalCharacter(username, '.', process.env.GE_DATABASE);
                     return Response.json({ ok: true });
                 } catch (error) { return Response.json({ error: String(error) }, { status: 400 }); }
@@ -400,6 +420,12 @@ export async function startManagementWeb() {
                         const settings = validateWorldSettings({ ...activeWorldSettings, stockDependentShopPricing: body.stockDependentShopPricing });
                         saveWorldSettings(settings);
                         activeWorldSettings.stockDependentShopPricing = settings.stockDependentShopPricing;
+                    } else if (body.action === 'community-crafting') {
+                        if (typeof body.communityCraftingMode !== 'boolean') throw new Error('Choose a Community Crafting mode');
+                        const settings = validateWorldSettings({...activeWorldSettings,communityCraftingMode:body.communityCraftingMode});
+                        saveWorldSettings(settings);
+                        activeWorldSettings.communityCraftingMode=settings.communityCraftingMode;
+                        for (const inv of World.invs) inv.applyCommunityCrafting();
                     } else if (body.action === 'shop-capacity') {
                         if (typeof body.unlimitedGeneralStoreSales !== 'boolean') throw new Error('Choose a general-store sales mode');
                         const settings = validateWorldSettings({ ...activeWorldSettings, unlimitedGeneralStoreSales: body.unlimitedGeneralStoreSales });

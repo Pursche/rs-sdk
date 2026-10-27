@@ -1,4 +1,5 @@
 export default class ServerGameProt {
+    static readonly ENCOUNTER_EVENTS = new ServerGameProt(254, -2);
     // interfaces
     static readonly IF_OPENCHAT = new ServerGameProt(81, 2);
     static readonly IF_OPENMAIN_SIDE = new ServerGameProt(55, 4);

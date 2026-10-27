@@ -19,6 +19,7 @@ stock1=bronze_chainbody,1
 stock2=bronze_platelegs,1
 stock3=bronze_plateskirt,1
 stock4=bronze_platebody,1
+stock5=macro_bronze_pickaxehead,1
 
 [smithing_bronze4]
 size=5
@@ -55,6 +56,7 @@ stock1=iron_chainbody,1
 stock2=iron_platelegs,1
 stock3=iron_plateskirt,1
 stock4=iron_platebody,1
+stock5=macro_iron_pickaxehead,1
 
 [smithing_iron4]
 size=5
@@ -90,6 +92,7 @@ stock1=steel_chainbody,1
 stock2=steel_platelegs,1
 stock3=steel_plateskirt,1
 stock4=steel_platebody,1
+stock5=macro_steel_pickaxehead,1
 
 [smithing_steel4]
 size=5
@@ -127,6 +130,7 @@ stock1=mithril_chainbody,1
 stock2=mithril_platelegs,1
 stock3=mithril_plateskirt,1
 stock4=mithril_platebody,1
+stock5=macro_mithril_pickaxehead,1
 
 [smithing_mithril4]
 size=5
@@ -162,6 +166,7 @@ stock1=adamant_chainbody,1
 stock2=adamant_platelegs,1
 stock3=adamant_plateskirt,1
 stock4=adamant_platebody,1
+stock5=macro_adamant_pickaxehead,1
 
 [smithing_adamant4]
 size=5
@@ -197,6 +202,7 @@ stock1=rune_chainbody,1
 stock2=rune_platelegs,1
 stock3=rune_plateskirt,1
 stock4=rune_platebody,1
+stock5=macro_rune_pickaxehead,1
 
 [smithing_rune4]
 size=5

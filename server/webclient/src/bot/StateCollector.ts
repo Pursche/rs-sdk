@@ -184,6 +184,7 @@ export class BotStateCollector implements ScanProvider {
             ge: collectGEState(IfType.list, c.mainModalId ?? -1),
             inGame: c.ingame || false,
             combatEvents: [...this.combatEvents], // Return copy of events
+            serverEncounter:c.serverEncounters?.snapshot(),
             dialog: this.collectDialogState(),
             interface: this.collectInterfaceState(),
             modalOpen: (c.mainModalId ?? -1) !== -1,

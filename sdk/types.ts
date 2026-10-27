@@ -1,3 +1,20 @@
+export interface EncounterActor {
+    kind: 'player' | 'npc'; entityId: string; id: number | null; index: number; name: string;
+    hp: number | null; maxHp: number | null;
+    /** Event-time absolute tile and plane. Null if the source no longer exists. */
+    position: { x: number; z: number; plane: number } | null;
+}
+export interface ServerEncounterEvent {
+    version: 1; id: string; tick: number; at: number;
+    kind: 'damage' | 'healing' | 'stat_loss' | 'life_reset' | 'death';
+    cause: string; script: string; amount: number; beforeHp: number; afterHp: number;
+    source: EncounterActor | null; target: EncounterActor; lethalEventId?: string; omittedBefore?: number;
+}
+export interface ServerEncounterState {
+    version: 1 | null; stream: string | null; ownerId: string | null;
+    events: ServerEncounterEvent[]; dropped: number;
+}
+
 import type { GEState } from './ge-types';
 // Re-export all types from the agent types module
 // This file provides the full type definitions for remote SDK users
@@ -595,6 +612,7 @@ export interface BotWorldState {
     modalInterface: number;
     combatStyle?: CombatStyleState;
     combatEvents: CombatEvent[];
+    serverEncounter?:ServerEncounterState;
     prayers: PrayerState;
     /** Absent when the connected client predates authoritative PK-skull telemetry. */
     isSkulled?: boolean;

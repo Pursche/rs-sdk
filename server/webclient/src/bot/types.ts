@@ -1,3 +1,4 @@
+import type {ServerEncounterState} from '../../../../sdk/types.js';
 import type { GEState } from '../../../../sdk/ge-types.js';
 // types.ts - Bot SDK Type Definitions
 // All interfaces, constants, and type definitions for the Bot SDK
@@ -440,6 +441,7 @@ export interface BotState {
     inGame: boolean;
     /** Recent combat events (damage, kills) - bounded to last ~50 ticks */
     combatEvents: CombatEvent[];
+    serverEncounter?:ServerEncounterState;
     /** Dialog state (NPC chat, options) */
     dialog: DialogState;
     /** Interface state (crafting menus, etc.) */

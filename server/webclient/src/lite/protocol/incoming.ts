@@ -1,3 +1,4 @@
+import { ClientProt } from '#/io/ClientProt.js';
 // Inbound packet framing + dispatch.
 //
 // Ported from Client.ts tcpIn(). One deliberate divergence: the browser client
@@ -363,8 +364,10 @@ export function dispatch(c: LiteClient, opcode: number, buf: Packet, psize: numb
         }
 
         // ---------------------------------------------------------------- chat
+        case ServerProt.ENCOUNTER_EVENTS: c.serverEncounters.receive(buf.gjstr()); return;
         case ServerProt.MESSAGE_GAME: {
             const message = buf.gjstr();
+            if(c.serverEncounters.capability(message,()=>c.writeOpcode(ClientProt.ENCOUNTER_SUBSCRIBE)))return;
             if (message.endsWith(':tradereq:')) {
                 c.addChat(4, 'wishes to trade with you.', message.substring(0, message.indexOf(':')));
             } else if (message.endsWith(':duelreq:')) {
